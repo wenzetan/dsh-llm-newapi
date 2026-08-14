@@ -81,8 +81,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - name: Install dsh
-        run: npm install -g @deepseek-ai/dsh
+      - name: Install dsh and pnpm
+        run: npm install -g @deepseek-ai/dsh pnpm
       - name: Install the packed tarball into a fresh web profile
         run: |
           set -euo pipefail
