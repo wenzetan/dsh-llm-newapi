@@ -31,6 +31,34 @@ jobs:
         run: npm test
       - name: Pack distribution tarball
         run: npm pack
+      - name: Packed tarball is self-contained
+        run: |
+          # The profile install runs with autoInstallPeers: false; at runtime
+          # the dsh host supplies the @deepseek-ai/* seam packages (and react
+          # on the browser side). Everything ELSE the packed host bundle
+          # imports must resolve from the tarball's own dependency list —
+          # resolving through this repository's node_modules is what let a
+          # missing dependency ship (v0.5.0's undici).
+          mkdir /tmp/selfcheck && tar -xzf dsh-llm-newapi-*.tgz -C /tmp/selfcheck
+          cd /tmp/selfcheck/package
+          npm install --omit=dev --no-audit --no-fund --ignore-scripts
+          node --input-type=module -e "
+            import { readFileSync } from 'node:fs'
+            const source = readFileSync('lib/index.js', 'utf8')
+            const specifiers = [...source.matchAll(/from\s+[\"']([^\"']+)[\"']/g)]
+              .map(m => m[1]).filter(s => !s.startsWith('.') && !s.startsWith('node:'))
+            const hostProvided = s => s === 'react' || s.startsWith('@deepseek-ai/')
+            const own = [...new Set(specifiers)].filter(s => !hostProvided(s))
+            const missing = own.filter(s => {
+              try { import.meta.resolve(s, new URL('./lib/index.js', import.meta.url)); return false }
+              catch { return true }
+            })
+            if (missing.length > 0) {
+              console.error('imports not resolvable from the packed tarball (add to dependencies): ' + missing.join(', '))
+              process.exit(1)
+            }
+            console.log('self-contained: ' + own.join(', '))
+          "
       - uses: actions/upload-artifact@v4
         with:
           name: dist
