@@ -26,13 +26,13 @@ dsh plugin --profile web add "github:wenzetan/dsh-llm-newapi"
 # 3. 重启 dsh web
 ```
 
-更新：重跑第 1 步后重启即可。锁定版本改用 tag 引用：`github:wenzetan/dsh-llm-newapi#v0.4.0`。
+更新：重跑第 1 步后重启即可。锁定版本改用 tag 引用：`github:wenzetan/dsh-llm-newapi#v0.5.0`。
 
 **方式 B：Release tarball（免 GitHub 克隆）**
 
 ```sh
 dsh plugin --profile web add \
-  https://github.com/wenzetan/dsh-llm-newapi/releases/download/v0.4.0/dsh-llm-newapi-0.4.0.tgz
+  https://github.com/wenzetan/dsh-llm-newapi/releases/download/v0.5.0/dsh-llm-newapi-0.5.0.tgz
 # 同方式 A 的第 2、3 步
 ```
 
@@ -91,6 +91,8 @@ npm test                       # cordis 实挂载 smoke：注册面 + chat-only 
 改源码后须重跑 `npm run build` 并**提交 `lib/`**——`github:` 安装从提交的产物运行，CI 的「Committed artifacts are current」步骤会在产物过期时拒绝。
 
 ## 状态
+
+v0.5：发现结果按 id 排序，`a/b` 形式 id 的显示名取最后一段（wire id 不变）；新增「更新模型信息」——浏览器把模型 id（与代理草稿）发给 host 半 RPC（`/llm-newapi` channel），由后端下载 `https://models.dev/api.json` 并按 id/末段匹配，返回 `limit.context`/`limit.output`；同名多供应商条目在结果面板由用户选择；应用时可选「覆盖」或「仅填空白」，未匹配行保持原值并计数提示。代理开关默认关闭、默认 `http://127.0.0.1:7890`，预置 7890/7897/10809 三个下拉项 + 自定义输入，启用状态与地址随设置段持久化（仅用于该下载，网关流量不走代理）。
 
 v0.4：模型目录照官方 Models 页（`ModelListEditor`）重设计——每模型一张边框卡片（ID + 显示名称在行内），上下文窗口 / 输出上限折叠在行首 chevron 后，支持 K/M 缩写输入（`256K`→256000、`1M`→1000000）与逐字段输入缓冲；保存前本地校验（空 ID / 重复 ID / 容量不可解析即拒绝并点名行）；空状态提示与胶囊「添加模型」按钮；删除行时展开态与缓冲按行号重排。
 

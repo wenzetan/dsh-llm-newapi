@@ -162,3 +162,43 @@ export interface WireModelEntry {
   /** OpenAI `owned_by` field when present. */
   owned_by?: string
 }
+
+/** Root of `https://models.dev/api.json`: one entry per provider id. */
+export interface ModelsDevApi {
+  [provider: string]: {
+    models?: Record<string, ModelsDevModel>
+  }
+}
+
+/** One model entry in the models.dev catalog. */
+export interface ModelsDevModel {
+  name?: string
+  /** Capacity facts: `limit.context` and `limit.output` are token counts. */
+  limit?: { context?: number; output?: number }
+}
+
+/** One models.dev provider match for a gateway model id. */
+export interface ModelsDevMatch {
+  /** models.dev provider id the entry lives under (e.g. `qwen`, `alibaba`). */
+  provider: string
+  /** Human-readable name from the catalog entry, when present. */
+  name?: string
+  /** Combined request/response context capacity (`limit.context`). */
+  contextWindow?: number
+  /** Per-request output cap (`limit.output`). */
+  maxTokens?: number
+}
+
+/** Request payload of the `models-dev-params` RPC endpoint. */
+export interface ModelsDevParamsRequest {
+  /** Gateway model ids to look up, verbatim. */
+  modelIds: string[]
+  /** Forward-proxy URL to route the api.json download through, when enabled. */
+  proxyUrl?: string
+}
+
+/** Response payload of the `models-dev-params` RPC endpoint. */
+export interface ModelsDevParamsResponse {
+  /** Per requested id: every provider entry that matched it, in catalog order. */
+  models: Array<{ id: string; matches: ModelsDevMatch[] }>
+}

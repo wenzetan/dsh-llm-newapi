@@ -12,7 +12,7 @@
 import { LlmAdapter } from '@deepseek-ai/dsh-llm';
 import type { GenerateOptions, LlmDiscoveredModel, LlmModelDiscoveryRequest, LlmModelInfo, LlmProviderInfo, LlmResolvedModelInfo, ResolvedRetryPolicy, StreamChunk } from '@deepseek-ai/dsh-llm';
 import type { CredentialRef } from '@deepseek-ai/dsh-credentials';
-import type { WireError } from './types.ts';
+import type { ModelsDevApi, ModelsDevMatch, ModelsDevParamsRequest, ModelsDevParamsResponse, WireError } from './types.ts';
 /** Prefix for adapter-raised diagnostics. */
 export declare const PKG = "llm-newapi";
 /**
@@ -72,6 +72,11 @@ export interface NewApiConnectionOptions {
     maxTokens?: number;
     /** Maximum provider idle time while one stream read is outstanding. */
     streamIdleTimeoutMs: number;
+    /**
+     * Forward proxy for the models.dev catalog download; present only while
+     * the proxy setting is enabled, so its absence means a direct fetch.
+     */
+    proxyUrl?: string;
     /** Provider-owned model-request retry policy, already resolved. */
     retryPolicy: ResolvedRetryPolicy;
 }
@@ -91,6 +96,19 @@ export interface NewApiAdapterOptions {
 export declare const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 300000;
 /** Default context capacity when neither the catalog nor config names one. */
 export declare const DEFAULT_CONTEXT_WINDOW = 128000;
+/** The public, provider-agnostic model catalog this feature reads. */
+export declare const MODELS_DEV_API_URL = "https://models.dev/api.json";
+/**
+ * Find every catalog entry one gateway model id can mean. A gateway id is
+ * matched verbatim first; a routed id (`qwen/qwen-max`) is additionally
+ * matched by its last path segment, because catalog keys carry no vendor
+ * prefix. Multiple providers can serve the same key — that ambiguity is
+ * exactly what the caller asks the user to resolve.
+ * @param api - the parsed models.dev catalog.
+ * @param id - a gateway model id.
+ * @returns every match, deduplicated by provider, in catalog order.
+ */
+export declare function matchModelsDev(api: ModelsDevApi, id: string): ModelsDevMatch[];
 /**
  * Normalize a user-supplied gateway base: trim, drop trailing slashes, and
  * require an absolute http(s) URL. Failing here — at the explicit resolve
@@ -100,6 +118,16 @@ export declare const DEFAULT_CONTEXT_WINDOW = 128000;
  * @returns the normalized base with no trailing slash.
  */
 export declare function normalizeBaseUrl(raw: string): string;
+/**
+ * Display name for one gateway model id. Routed ids (`qwen/qwen-max`,
+ * `openai/gpt-4o`) carry their vendor as a path prefix; the last segment is
+ * what a person reads as the model name, while the full id stays the wire
+ * value the gateway answers to.
+ * @param id - the full gateway model id.
+ * @param listed - the name the gateway listing itself supplied, if any.
+ * @returns the listed name when present, else the id's last path segment.
+ */
+export declare function displayModelName(id: string, listed?: string): string;
 /**
  * Map an HTTP status to a stable LlmError code.
  * @param status - status of a non-2xx gateway response.
@@ -131,6 +159,18 @@ export declare class NewApiAdapter extends LlmAdapter {
      *   with context/maxTokens facts from the configured catalog when ids match.
      */
     discoverModels(request: LlmModelDiscoveryRequest): Promise<readonly LlmDiscoveredModel[]>;
+    /**
+     * Download the models.dev catalog (optionally through the configured
+     * forward proxy) and match every requested gateway id against it, serving
+     * the `models-dev-params` RPC endpoint. Runs host-side on purpose: the
+     * browser only names the ids and the proxy, so no cross-origin download
+     * happens and the proxy is a plain HTTP forward proxy Node can use.
+     * @param request - gateway model ids and an optional proxy URL.
+     * @param signal - caller cancellation.
+     * @returns per id: every provider entry that matched it (possibly several —
+     *   the user resolves which provider's facts to adopt), possibly none.
+     */
+    fetchModelsDevParams(request: ModelsDevParamsRequest, signal: AbortSignal): Promise<ModelsDevParamsResponse>;
     stream(options: GenerateOptions): AsyncIterable<StreamChunk>;
     private request;
 }

@@ -29,11 +29,14 @@ import {
   PKG,
 } from './adapter.ts'
 import type { NewApiCatalogModel, NewApiConnectionOptions } from './adapter.ts'
+import type { ModelsDevParamsRequest } from './types.ts'
+import type { HostConnectionHandle } from '@deepseek-ai/dsh-client-connection'
 
 export {
   DEFAULT_CONTEXT_WINDOW,
   DEFAULT_MODEL_EXCLUDE_PATTERNS,
   DEFAULT_STREAM_IDLE_TIMEOUT_MS,
+  matchModelsDev,
   NewApiAdapter,
   normalizeBaseUrl,
   PKG,
@@ -90,8 +93,23 @@ export interface Config {
   maxTokens?: number
   /** Maximum gateway idle time while one stream read is outstanding (default five minutes). */
   streamIdleTimeoutMs?: number
+  /**
+   * Forward proxy for the models.dev catalog download performed by the
+   *「更新模型信息」action: disabled by default; when enabled, that one
+   * request is routed through `proxy.url` (a plain HTTP forward proxy).
+   * Gateway traffic is untouched.
+   */
+  proxy?: ProxyConfig
   /** Provider-owned model-request retry policy; omission uses normal defaults. */
   retryPolicy?: RetryPolicyConfig
+}
+
+/** Forward-proxy settings for the models.dev catalog download. */
+export interface ProxyConfig {
+  /** Whether the proxy is used; defaults to false. */
+  enabled?: boolean
+  /** Proxy URL; presets default to `http://127.0.0.1:7890`. */
+  url?: string
 }
 
 const catalogModel: z<NewApiCatalogModel> = z.object({
@@ -102,6 +120,14 @@ const catalogModel: z<NewApiCatalogModel> = z.object({
   maxTokens: z.number().step(1).min(1),
 })
 
+/** Default forward proxy: the conventional Clash port on loopback. */
+export const DEFAULT_PROXY_URL = 'http://127.0.0.1:7890'
+
+const proxySchema: z<ProxyConfig> = z.object({
+  enabled: z.boolean().default(false),
+  url: z.string().default(DEFAULT_PROXY_URL),
+})
+
 export const Config: z<Config> = z.object({
   baseURL: z.string(),
   models: z.array(catalogModel).default([]),
@@ -109,6 +135,7 @@ export const Config: z<Config> = z.object({
   defaultContextWindow: z.number().step(1).min(1).default(DEFAULT_CONTEXT_WINDOW),
   maxTokens: z.number().step(1).min(1).max(Number.MAX_SAFE_INTEGER),
   streamIdleTimeoutMs: z.number().min(Number.MIN_VALUE).max(MAX_TIMER_DELAY_MS).default(DEFAULT_STREAM_IDLE_TIMEOUT_MS),
+  proxy: proxySchema.default({ enabled: false, url: DEFAULT_PROXY_URL }),
   retryPolicy: RetryPolicySchema,
 })
 
@@ -193,6 +220,18 @@ export function resolveAdapterOptions(config: Config, environment?: ReturnType<t
     )
   }
   const defaultContextWindow = config.defaultContextWindow ?? DEFAULT_CONTEXT_WINDOW
+  const proxyEnabled = config.proxy?.enabled === true
+  const proxyUrlRaw = config.proxy?.url ?? DEFAULT_PROXY_URL
+  if (proxyEnabled) {
+    // Only judged while enabled: a stored disabled proxy with a stale URL
+    // must not fail the whole section.
+    try { new URL(proxyUrlRaw) } catch {
+      throw new Error(`${PKG}: proxy.url must be an absolute URL (got: ${proxyUrlRaw})`)
+    }
+    if (!/^https?:$/.test(new URL(proxyUrlRaw).protocol)) {
+      throw new Error(`${PKG}: proxy.url must be an http(s) URL (got: ${proxyUrlRaw})`)
+    }
+  }
   return {
     baseURL: normalizeBaseUrl(rawBase),
     apiKeyRef: credentialRef(API_KEY_REF),
@@ -200,6 +239,7 @@ export function resolveAdapterOptions(config: Config, environment?: ReturnType<t
     modelExcludePatterns,
     defaultContextWindow,
     streamIdleTimeoutMs,
+    ...proxyEnabled ? { proxyUrl: proxyUrlRaw } : {},
     retryPolicy: resolveRetryPolicy(config.retryPolicy, `${PKG}: retryPolicy`),
     ...config.maxTokens === undefined ? {} : { maxTokens: config.maxTokens },
   }
@@ -280,6 +320,31 @@ export function apply(ctx: Context, config: Config): void {
   // page interrogates the gateway's /models with the draft's endpoint and
   // one-shot credential, or the current snapshot's facts.
   ctx.llm.registerModelDiscovery(NS, request => adapter.discoverModels(request))
+
+  // Host-side endpoint for the「更新模型信息」action: the browser names
+  // the gateway model ids (and optionally the proxy draft) and the host
+  // downloads https://models.dev/api.json — no cross-origin fetch happens in
+  // the browser, and a plain HTTP forward proxy works because Node performs
+  // the request. Optional: without the connection service (headless hosts)
+  // there is simply no browser face to serve.
+  const connection = ctx.get('connection') as HostConnectionHandle | undefined
+  if (connection !== undefined) {
+    ctx.effect(() => connection.rpc.handle(
+      '/llm-newapi',
+      (endpoint: string, payload: unknown, signal: AbortSignal) => {
+        if (endpoint !== 'models-dev-params') {
+          return Promise.resolve({
+            ok: false as const,
+            error: { code: 'internal' as const, message: `llm-newapi: unknown endpoint ${endpoint}`, details: {} },
+          })
+        }
+        const request = payload as ModelsDevParamsRequest
+        return adapter.fetchModelsDevParams(request, signal)
+          .then(value => ({ ok: true as const, value }))
+      },
+      { authority: 'loopback' },
+    ), 'llm-newapi: models-dev RPC channel')
+  }
 
   installSettingsSection(ctx, NS, Config, config, {
     // Refuse an unserviceable section where it is written: without this a

@@ -175,4 +175,51 @@ function stubModelsListing() {
   assert.equal(asked.url, 'http://settings-gw:9000/v1/models')
 }
 
-console.log('smoke: llm-newapi registrations, chat-only discovery, credentials-service key, settings validation, and fiber disposal OK')
+// ── Block D: discovery ordering, display names, and the models.dev match ──
+{
+  const ctx = new Context()
+  await ctx.plugin(LlmRuntime)
+  await ctx.plugin(FakeCredentials, { newapi: 'key-d' })
+  await mountPlugin(ctx)
+
+  // Discovery sorts by id and derives routed display names from the last path segment.
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    object: 'list',
+    data: [
+      { id: 'zhipu/glm-5.3' },
+      { id: 'deepseek-chat' },
+      { id: 'qwen/qwen-max', name: 'Qwen Max' },
+    ],
+  }), { status: 200, headers: { 'content-type': 'application/json' } })
+  let discovered
+  try {
+    discovered = await ctx.llm.discoverModels('llm-newapi', { provider: 'newapi' })
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+  assert.deepEqual(discovered.map(m => m.id), ['deepseek-chat', 'qwen/qwen-max', 'zhipu/glm-5.3'])
+  assert.equal(discovered.find(m => m.id === 'zhipu/glm-5.3').name, 'glm-5.3')
+  assert.equal(discovered.find(m => m.id === 'qwen/qwen-max').name, 'Qwen Max')
+
+  // matchModelsDev: verbatim and last-segment keys, several providers kept.
+  const api = {
+    qwen: { models: { 'qwen-max': { limit: { context: 262144, output: 32768 } } } },
+    alibaba: { models: { 'qwen-max': { name: 'Qwen Max (DashScope)', limit: { context: 131072 } } } },
+    empty: {},
+  }
+  assert.deepEqual(plugin.matchModelsDev(api, 'qwen/qwen-max'), [
+    { provider: 'qwen', contextWindow: 262144, maxTokens: 32768 },
+    { provider: 'alibaba', name: 'Qwen Max (DashScope)', contextWindow: 131072 },
+  ])
+  assert.deepEqual(plugin.matchModelsDev(api, 'unknown-model'), [])
+
+  // The settings write point refuses an enabled proxy with a non-http(s) url.
+  await ctx.plugin(MemorySettings, {})
+  await assert.rejects(
+    ctx.settings.update(settingsNamespace('llm-newapi'), { proxy: { enabled: true, url: 'ftp://x' } }),
+    (error) => error.message.includes('proxy.url must be an http(s) URL'),
+  )
+}
+
+console.log('smoke: llm-newapi registrations, chat-only discovery, credentials-service key, settings validation, ordering, display names, and models.dev matching OK')

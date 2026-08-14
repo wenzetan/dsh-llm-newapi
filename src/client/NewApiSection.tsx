@@ -16,6 +16,7 @@ import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { DiscoveredModelView, IApiClient, SettingsNamespaceView, SettingsPathOpView } from '@deepseek-ai/dsh-client-connection/client'
 import type { NewApiKey } from './locale.ts'
+import type { ModelsDevParamsRequest, ModelsDevParamsResponse } from './params-types.ts'
 
 /**
  * One catalog entry, structurally open like the official editors: a field
@@ -114,15 +115,26 @@ function IconTrash(): ReactNode {
   )
 }
 
-/** Inject face: the wire face and the bound translate. */
+/** Inject face: the wire face, the bound translate, and the models.dev params call. */
 export interface NewApiSectionProps {
   api: Pick<IApiClient, 'settings' | 'credentials' | 'llm'>
   t: (key: NewApiKey) => string
+  /** Host-side models.dev catalog lookup (browser sends ids + proxy only). */
+  fetchModelParams: (
+    request: ModelsDevParamsRequest,
+  ) => Promise<{ ok: true; value: ModelsDevParamsResponse } | { ok: false; error: { message: string } }>
 }
 
 const NS = 'llm-newapi'
 /** Credential reference the host half resolves per request (see apply.ts). */
 const KEY_REF = 'newapi'
+
+/** Conventional local proxy ports offered as presets. */
+const PROXY_PRESETS = [
+  'http://127.0.0.1:7890',
+  'http://127.0.0.1:7897',
+  'http://127.0.0.1:10809',
+] as const
 
 /** Convert a stored section value into editable rows without dropping fields. */
 function toDrafts(source: unknown): ModelDraft[] {
@@ -167,6 +179,14 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
   const [notice, setNotice] = useState<string | undefined>(undefined)
   const [candidates, setCandidates] = useState<readonly DiscoveredModelView[] | undefined>(undefined)
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set())
+  /** Proxy draft for the models.dev download; persisted with the section. */
+  const [proxyEnabled, setProxyEnabled] = useState(false)
+  const [proxyUrl, setProxyUrl] = useState<string>(PROXY_PRESETS[0])
+  /** models.dev lookup result the params panel resolves against. */
+  const [params, setParams] = useState<ModelsDevParamsResponse | undefined>(undefined)
+  /** Chosen match index per model id, for ids with several providers. */
+  const [paramChoices, setParamChoices] = useState<ReadonlyMap<string, number>>(new Map())
+  const [paramsBusy, setParamsBusy] = useState(false)
 
   const load = async (): Promise<void> => {
     setStatus('loading')
@@ -189,6 +209,9 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
       setRevision(section.revision)
       setBaseURL(typeof value.baseURL === 'string' ? value.baseURL : '')
       setModels(toDrafts(value.models))
+      const proxy = (value.proxy ?? {}) as { enabled?: unknown; url?: unknown }
+      setProxyEnabled(proxy.enabled === true)
+      if (typeof proxy.url === 'string' && proxy.url.length > 0) setProxyUrl(proxy.url)
       setExpanded(new Set())
       setEditing(new Map())
       const credential = await api.credentials.describe({ refs: [KEY_REF] })
@@ -249,6 +272,11 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
       const ops: SettingsPathOpView[] = []
       if (trimmedBase.length > 0) ops.push({ op: 'set', path: ['baseURL'], value: trimmedBase })
       else ops.push({ op: 'unset', path: ['baseURL'] })
+      ops.push({
+        op: 'set',
+        path: ['proxy'],
+        value: { enabled: proxyEnabled, url: proxyUrl.trim().length > 0 ? proxyUrl.trim() : PROXY_PRESETS[0] },
+      })
       ops.push({
         op: 'set',
         path: ['models'],
@@ -346,6 +374,73 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
       if (!next.delete(id)) next.add(id)
       return next
     })
+  }
+
+  /** Ask the host (via the RPC face) what models.dev knows about the rows. */
+  const updateParams = async (): Promise<void> => {
+    const ids = models.map(model => textOf(model, 'id').trim()).filter(id => id.length > 0)
+    if (ids.length === 0) {
+      setErrorText(t('paramsNoModels'))
+      return
+    }
+    setParamsBusy(true)
+    setErrorText(undefined)
+    setParams(undefined)
+    try {
+      const response = await props.fetchModelParams({
+        modelIds: ids,
+        ...proxyEnabled && proxyUrl.trim().length > 0 ? { proxyUrl: proxyUrl.trim() } : {},
+      })
+      if (!response.ok) {
+        setErrorText(response.error.message)
+        return
+      }
+      setParams(response.value)
+      setParamChoices(new Map())
+    } catch (error) {
+      setErrorText(error instanceof Error ? error.message : String(error))
+    } finally {
+      setParamsBusy(false)
+    }
+  }
+
+  /** The match a panel row currently shows: the user's choice, else the first. */
+  const chosenMatch = (entry: { id: string; matches: ModelsDevParamsResponse['models'][number]['matches'] }) =>
+    entry.matches[paramChoices.get(entry.id) ?? 0] ?? entry.matches[0]
+
+  /**
+   * Apply the panel's chosen matches to the rows: overwrite mode replaces
+   * the capacities the catalog provides; blank mode only fills empty fields.
+   * Ids with no match keep their stored values.
+   * @param overwrite - whether existing values are replaced.
+   */
+  const applyParams = (overwrite: boolean): void => {
+    if (params === undefined) return
+    const byId = new Map(params.models.map(entry => [entry.id, entry]))
+    let touched = 0
+    const next = models.map(model => {
+      const id = textOf(model, 'id').trim()
+      const entry = byId.get(id)
+      const match = entry === undefined || entry.matches.length === 0 ? undefined : chosenMatch(entry)
+      if (match === undefined) return model
+      const nextContext = match.contextWindow
+      const nextMax = match.maxTokens
+      const currentContext = numberOf(model, 'contextWindow')
+      const currentMax = numberOf(model, 'maxTokens')
+      const takeContext = nextContext !== undefined && (overwrite || currentContext === undefined)
+      const takeMax = nextMax !== undefined && (overwrite || currentMax === undefined)
+      if (!takeContext && !takeMax) return model
+      touched += 1
+      return {
+        ...model,
+        ...takeContext && nextContext !== undefined ? { contextWindow: nextContext } : {},
+        ...takeMax && nextMax !== undefined ? { maxTokens: nextMax } : {},
+      }
+    })
+    setModels(next)
+    setParams(undefined)
+    setParamChoices(new Map())
+    setNotice(`${t('paramsApplied')} (${String(touched)})`)
   }
 
   /** Replace one row, dropping optional fields the edit emptied. */
@@ -451,9 +546,46 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
       <section className="newapi-catalog" aria-label={t('models')}>
         <div className="newapi-catalog-head">
           <span className="newapi-catalog-title">{t('models')}</span>
-          <button type="button" className="newapi-linkbutton" disabled={busy} onClick={() => { void fetchModels() }}>
-            {busy ? t('fetching') : t('fetchModels')}
-          </button>
+          <div className="newapi-catalog-actions" style={{ display: 'flex', gap: 4 }}>
+            <button type="button" className="newapi-linkbutton" disabled={busy} onClick={() => { void fetchModels() }}>
+              {busy ? t('fetching') : t('fetchModels')}
+            </button>
+            <button type="button" className="newapi-linkbutton" disabled={paramsBusy} onClick={() => { void updateParams() }}>
+              {paramsBusy ? t('paramsFetching') : t('updateParams')}
+            </button>
+          </div>
+        </div>
+        <div className="newapi-proxyrow">
+          <label>
+            <input
+              type="checkbox" checked={proxyEnabled}
+              aria-label={t('proxyToggle')}
+              onChange={(event) => { setProxyEnabled(event.target.checked) }}
+            />
+            {t('proxyToggle')}
+          </label>
+          {proxyEnabled
+            ? (
+              <>
+                <select
+                  className="newapi-select" aria-label={t('proxyPreset')}
+                  value={PROXY_PRESETS.includes(proxyUrl as (typeof PROXY_PRESETS)[number]) ? proxyUrl : 'custom'}
+                  onChange={(event) => {
+                    if (event.target.value !== 'custom') setProxyUrl(event.target.value)
+                  }}
+                >
+                  {PROXY_PRESETS.map(preset => <option key={preset} value={preset}>{preset}</option>)}
+                  <option value="custom">{t('proxyCustom')}</option>
+                </select>
+                <input
+                  className="newapi-input" type="text" style={{ maxWidth: 220 }}
+                  aria-label={t('proxyUrl')} placeholder="http://127.0.0.1:7890"
+                  value={proxyUrl}
+                  onChange={(event) => { setProxyUrl(event.target.value) }}
+                />
+              </>
+            )
+            : null}
         </div>
         {models.length === 0 ? <p className="newapi-empty">{t('modelsEmpty')}</p> : null}
         {models.map((model, index) => (
@@ -548,6 +680,74 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
           <button type="button" className="newapi-button" onClick={() => { setCandidates(undefined); setPicked(new Set()) }}>
             {t('fetchCancel')}
           </button>
+        </div>
+      )}
+
+      {params === undefined ? null : (
+        <div className="newapi-params">
+          <strong>{t('paramsTitle')}</strong>
+          <p className="newapi-params-summary">{
+            t('paramsSummary')
+              .replace('{matched}', String(params.models.filter(entry => entry.matches.length > 0).length))
+              .replace('{unmatched}', String(params.models.filter(entry => entry.matches.length === 0).length))
+          }</p>
+          {params.models.map(entry => {
+            if (entry.matches.length === 0) {
+              return (
+                <div key={entry.id} className="newapi-params-row">
+                  <span className="newapi-params-id">{entry.id}</span>
+                  <span className="newapi-params-unmatched">{t('paramsUnmatched')}</span>
+                  <span />
+                </div>
+              )
+            }
+            if (entry.matches.length === 1) {
+              const match = entry.matches[0]
+              if (match === undefined) return null
+              return (
+                <div key={entry.id} className="newapi-params-row">
+                  <span className="newapi-params-id">{entry.id}</span>
+                  <span className="newapi-params-values">
+                    {`${match.provider} · ${t('contextWindow')} ${match.contextWindow ?? '—'} / ${t('maxTokens')} ${match.maxTokens ?? '—'}`}
+                  </span>
+                  <span />
+                </div>
+              )
+            }
+            const chosen = paramChoices.get(entry.id) ?? 0
+            const match = entry.matches[chosen] ?? entry.matches[0]
+            if (match === undefined) return null
+            return (
+              <div key={entry.id} className="newapi-params-row">
+                <span className="newapi-params-id">{entry.id}</span>
+                <select
+                  className="newapi-select" aria-label={`${t('paramsProvider')} ${entry.id}`}
+                  value={String(chosen)}
+                  onChange={(event) => {
+                    setParamChoices(current => new Map(current).set(entry.id, Number(event.target.value)))
+                  }}
+                >
+                  {entry.matches.map((candidate, at) => (
+                    <option key={candidate.provider} value={String(at)}>
+                      {`${candidate.provider}: ${t('contextWindow')} ${candidate.contextWindow ?? '—'} / ${t('maxTokens')} ${candidate.maxTokens ?? '—'}`}
+                    </option>
+                  ))}
+                </select>
+                <span className="newapi-params-values">{match.provider}</span>
+              </div>
+            )
+          })}
+          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+            <button type="button" className="newapi-button newapi-button--primary" onClick={() => { applyParams(true) }}>
+              {t('paramsOverwrite')}
+            </button>
+            <button type="button" className="newapi-button" onClick={() => { applyParams(false) }}>
+              {t('paramsFillBlank')}
+            </button>
+            <button type="button" className="newapi-button" onClick={() => { setParams(undefined); setParamChoices(new Map()) }}>
+              {t('fetchCancel')}
+            </button>
+          </div>
         </div>
       )}
 

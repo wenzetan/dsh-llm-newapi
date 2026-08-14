@@ -48,6 +48,23 @@ function wireFace(overrides: Partial<{
   }
 }
 
+/** A params face answering one scripted models.dev lookup. */
+function paramsFace() {
+  return vi.fn(() => Promise.resolve({
+    ok: true as const,
+    value: {
+      models: [
+        { id: 'deepseek-chat', matches: [{ provider: 'deepseek', contextWindow: 128_000, maxTokens: 8_192 }] },
+        { id: 'qwen/qwen-max', matches: [
+          { provider: 'qwen', contextWindow: 262_144, maxTokens: 32_768 },
+          { provider: 'alibaba', contextWindow: 131_072 },
+        ] },
+        { id: 'mystery-model', matches: [] },
+      ],
+    },
+  }))
+}
+
 describe('NewApiSection mount', () => {
   it('loads the section on mount and renders the configuration form', async () => {
     const api = wireFace()
@@ -101,6 +118,96 @@ describe('environment-supplied credential (read-only)', () => {
     await waitFor(() => { expect(api.settings.mutate).toHaveBeenCalledTimes(1) })
     expect(api.credentials.set).not.toHaveBeenCalled()
     await waitFor(() => { expect(screen.getByText(t('saved'))).toBeTruthy() })
+  })
+})
+
+describe('models.dev params update', () => {
+  it('shows the summary and applies chosen provider facts overwriting existing values', async () => {
+    const api = wireFace({
+      describeAnswer: {
+        writable: true,
+        hasDocument: true,
+        namespaces: [{
+          ns: 'llm-newapi',
+          schema: {},
+          value: {
+            baseURL: 'http://gw.local:3000/v1',
+            models: [{ id: 'deepseek-chat' }, { id: 'qwen/qwen-max' }, { id: 'mystery-model' }],
+          },
+          applies: 'live',
+          secrets: [],
+          revision: 7,
+        }],
+      },
+    })
+    const fetchModelParams = paramsFace()
+    render(<NewApiSection api={api as never} t={t} fetchModelParams={fetchModelParams as never} />)
+
+    await waitFor(() => { expect(screen.getByText(t('updateParams'))).toBeTruthy() })
+    fireEvent.click(screen.getByText(t('updateParams')))
+    await waitFor(() => { expect(screen.getByText(t('paramsTitle'))).toBeTruthy() })
+    // The summary names both matched counts; the unmatched row says so.
+    expect(screen.getByText((_, element) =>
+      element?.textContent === t('paramsSummary').replace('{matched}', '2').replace('{unmatched}', '1'),
+    )).toBeTruthy()
+    expect(screen.getByText(t('paramsUnmatched'))).toBeTruthy()
+    // The ambiguous id offers a provider picker with both entries.
+    const picker = screen.getByLabelText(`${t('paramsProvider')} qwen/qwen-max`) as HTMLSelectElement
+    expect(picker.options.length).toBe(2)
+
+    // Overwrite applies the first match of each id (deepseek 128K/8K, qwen 262K/32K);
+    // mystery-model keeps its (empty) values.
+    fireEvent.click(screen.getByText(t('paramsOverwrite')))
+    await waitFor(() => { expect(screen.getByText(new RegExp(t('paramsApplied')))).toBeTruthy() })
+    fireEvent.click(screen.getByText(t('apply')))
+    await waitFor(() => { expect(api.settings.mutate).toHaveBeenCalledTimes(1) })
+    const models = api.settings.mutate.mock.calls[0][0].ops
+      .find((op: { path: string[] }) => op.path[0] === 'models').value
+    expect(models[0]).toEqual({ id: 'deepseek-chat', contextWindow: 128_000, maxTokens: 8_192 })
+    expect(models[1]).toEqual({ id: 'qwen/qwen-max', contextWindow: 262_144, maxTokens: 32_768 })
+    expect(models[2]).toEqual({ id: 'mystery-model' })
+  })
+
+  it('fill-blank mode keeps values the rows already carry', async () => {
+    const api = wireFace()
+    const fetchModelParams = paramsFace()
+    render(<NewApiSection api={api as never} t={t} fetchModelParams={fetchModelParams as never} />)
+
+    await waitFor(() => { expect(screen.getByText(t('updateParams'))).toBeTruthy() })
+    // The fixture row already has contextWindow 65536; blank mode keeps it and only fills maxTokens.
+    fireEvent.click(screen.getByText(t('updateParams')))
+    await waitFor(() => { expect(screen.getByText(t('paramsOverwrite'))).toBeTruthy() })
+    fireEvent.click(screen.getByText(t('paramsFillBlank')))
+    await waitFor(() => { expect(screen.getByText(new RegExp(t('paramsApplied')))).toBeTruthy() })
+    fireEvent.click(screen.getByText(t('apply')))
+    await waitFor(() => { expect(api.settings.mutate).toHaveBeenCalledTimes(1) })
+    const models = api.settings.mutate.mock.calls[0][0].ops
+      .find((op: { path: string[] }) => op.path[0] === 'models').value
+    expect(models[0]).toEqual({ id: 'deepseek-chat', contextWindow: 65_536, maxTokens: 8_192 })
+  })
+
+  it('sends the proxy url only while the toggle is on, and persists the proxy section', async () => {
+    const api = wireFace()
+    const fetchModelParams = paramsFace()
+    render(<NewApiSection api={api as never} t={t} fetchModelParams={fetchModelParams as never} />)
+
+    await waitFor(() => { expect(screen.getByLabelText(t('proxyToggle'))).toBeTruthy() })
+    fireEvent.click(screen.getByText(t('updateParams')))
+    await waitFor(() => { expect(fetchModelParams).toHaveBeenCalledTimes(1) })
+    expect(fetchModelParams.mock.calls[0][0].proxyUrl).toBeUndefined()
+
+    fireEvent.click(screen.getByLabelText(t('proxyToggle')))
+    fireEvent.change(screen.getByLabelText(t('proxyUrl')), { target: { value: 'http://127.0.0.1:7897' } })
+    fireEvent.click(screen.getByText(t('updateParams')))
+    await waitFor(() => { expect(fetchModelParams).toHaveBeenCalledTimes(2) })
+    expect(fetchModelParams.mock.calls[1][0].proxyUrl).toBe('http://127.0.0.1:7897')
+
+    fireEvent.click(screen.getByText(t('fetchCancel')))
+    fireEvent.click(screen.getByText(t('apply')))
+    await waitFor(() => { expect(api.settings.mutate).toHaveBeenCalledTimes(1) })
+    const proxy = api.settings.mutate.mock.calls[0][0].ops
+      .find((op: { path: string[] }) => op.path[0] === 'proxy').value
+    expect(proxy).toEqual({ enabled: true, url: 'http://127.0.0.1:7897' })
   })
 })
 

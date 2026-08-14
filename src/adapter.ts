@@ -33,10 +33,19 @@ import type {
 } from '@deepseek-ai/dsh-llm'
 import type { CredentialRef } from '@deepseek-ai/dsh-credentials'
 import { idleWatchdog, timeoutOf } from '@deepseek-ai/dsh-timeout'
+import { ProxyAgent } from 'undici'
 import { serializeRequest } from './serialize.ts'
 import { parseSse } from './sse.ts'
 import { translate } from './translate.ts'
-import type { WireError, WireModelList } from './types.ts'
+import type {
+  ModelsDevApi,
+  ModelsDevMatch,
+  ModelsDevModel,
+  ModelsDevParamsRequest,
+  ModelsDevParamsResponse,
+  WireError,
+  WireModelList,
+} from './types.ts'
 
 /** Prefix for adapter-raised diagnostics. */
 export const PKG = 'llm-newapi'
@@ -100,6 +109,11 @@ export interface NewApiConnectionOptions {
   maxTokens?: number
   /** Maximum provider idle time while one stream read is outstanding. */
   streamIdleTimeoutMs: number
+  /**
+   * Forward proxy for the models.dev catalog download; present only while
+   * the proxy setting is enabled, so its absence means a direct fetch.
+   */
+  proxyUrl?: string
   /** Provider-owned model-request retry policy, already resolved. */
   retryPolicy: ResolvedRetryPolicy
 }
@@ -122,6 +136,60 @@ export const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 300_000
 /** Default context capacity when neither the catalog nor config names one. */
 export const DEFAULT_CONTEXT_WINDOW = 128_000
 const STREAM_IDLE_TIMEOUT_CODE = 'LLM_STREAM_IDLE_TIMEOUT'
+
+/** The public, provider-agnostic model catalog this feature reads. */
+export const MODELS_DEV_API_URL = 'https://models.dev/api.json'
+/** One-shot download budget for the catalog fetch. */
+const MODELS_DEV_TIMEOUT_MS = 30_000
+
+/**
+ * One provider entry from the catalog, narrowed to what the feature fills.
+ * @param provider - models.dev provider id the entry lives under.
+ * @param entry - the catalog model entry.
+ * @returns the match, or `undefined` when the entry carries no capacity fact.
+ */
+function modelsDevMatch(provider: string, entry: ModelsDevModel): ModelsDevMatch | undefined {
+  const contextWindow = entry.limit?.context
+  const maxTokens = entry.limit?.output
+  if (contextWindow === undefined && maxTokens === undefined) return undefined
+  return {
+    provider,
+    ...entry.name !== undefined && entry.name.length > 0 ? { name: entry.name } : {},
+    ...contextWindow !== undefined ? { contextWindow } : {},
+    ...maxTokens !== undefined ? { maxTokens } : {},
+  }
+}
+
+/**
+ * Find every catalog entry one gateway model id can mean. A gateway id is
+ * matched verbatim first; a routed id (`qwen/qwen-max`) is additionally
+ * matched by its last path segment, because catalog keys carry no vendor
+ * prefix. Multiple providers can serve the same key — that ambiguity is
+ * exactly what the caller asks the user to resolve.
+ * @param api - the parsed models.dev catalog.
+ * @param id - a gateway model id.
+ * @returns every match, deduplicated by provider, in catalog order.
+ */
+export function matchModelsDev(api: ModelsDevApi, id: string): ModelsDevMatch[] {
+  const keys = new Set<string>([id])
+  const slash = id.lastIndexOf('/')
+  if (slash !== -1 && slash < id.length - 1) keys.add(id.slice(slash + 1))
+  const matches: ModelsDevMatch[] = []
+  const seen = new Set<string>()
+  for (const [provider, catalog] of Object.entries(api)) {
+    const models = catalog?.models
+    if (models === undefined || typeof models !== 'object') continue
+    for (const key of keys) {
+      const entry = models[key]
+      if (entry === undefined || typeof entry !== 'object') continue
+      const match = modelsDevMatch(provider, entry)
+      if (match === undefined || seen.has(provider)) continue
+      seen.add(provider)
+      matches.push(match)
+    }
+  }
+  return matches
+}
 
 /**
  * Normalize a user-supplied gateway base: trim, drop trailing slashes, and
@@ -147,6 +215,21 @@ function modelInfo(provider: string, model: NewApiCatalogModel): LlmModelInfo {
     ...model.description === undefined ? {} : { description: model.description },
     inputModalities: ['text'],
   }
+}
+
+/**
+ * Display name for one gateway model id. Routed ids (`qwen/qwen-max`,
+ * `openai/gpt-4o`) carry their vendor as a path prefix; the last segment is
+ * what a person reads as the model name, while the full id stays the wire
+ * value the gateway answers to.
+ * @param id - the full gateway model id.
+ * @param listed - the name the gateway listing itself supplied, if any.
+ * @returns the listed name when present, else the id's last path segment.
+ */
+export function displayModelName(id: string, listed?: string): string {
+  if (listed !== undefined && listed.length > 0) return listed
+  const slash = id.lastIndexOf('/')
+  return slash === -1 ? id : id.slice(slash + 1)
 }
 
 function providerRetryAfterMs(value: string | null): number | undefined {
@@ -301,12 +384,65 @@ export class NewApiAdapter extends LlmAdapter {
       const known = catalog.get(entry.id)
       models.push({
         id: entry.id,
-        ...entry.name !== undefined && entry.name.length > 0 ? { name: entry.name } : {},
+        name: displayModelName(entry.id, entry.name),
         ...known?.contextWindow !== undefined ? { contextWindow: known.contextWindow } : {},
         ...known?.maxTokens !== undefined ? { maxTokens: known.maxTokens } : {},
       })
     }
+    // Sorted by id: a gateway listing has no meaningful order of its own, and
+    // a stable alphabetical one keeps the picker scannable across fetches.
+    models.sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
     return models
+  }
+
+  /**
+   * Download the models.dev catalog (optionally through the configured
+   * forward proxy) and match every requested gateway id against it, serving
+   * the `models-dev-params` RPC endpoint. Runs host-side on purpose: the
+   * browser only names the ids and the proxy, so no cross-origin download
+   * happens and the proxy is a plain HTTP forward proxy Node can use.
+   * @param request - gateway model ids and an optional proxy URL.
+   * @param signal - caller cancellation.
+   * @returns per id: every provider entry that matched it (possibly several —
+   *   the user resolves which provider's facts to adopt), possibly none.
+   */
+  async fetchModelsDevParams(
+    request: ModelsDevParamsRequest,
+    signal: AbortSignal,
+  ): Promise<ModelsDevParamsResponse> {
+    // The enabled-proxy setting travels with the connection snapshot; an
+    // explicit per-request URL (the unsaved draft in the form) overrides it.
+    const proxyUrl = request.proxyUrl !== undefined && request.proxyUrl.length > 0
+      ? request.proxyUrl
+      : this.config.options().proxyUrl
+    const dispatcher = proxyUrl !== undefined
+      ? new ProxyAgent(proxyUrl)
+      : undefined
+    let api: ModelsDevApi
+    try {
+      const response = await fetch(MODELS_DEV_API_URL, {
+        headers: { accept: 'application/json', ...attributionHeaders() },
+        signal: AbortSignal.any([signal, AbortSignal.timeout(MODELS_DEV_TIMEOUT_MS)]),
+        ...dispatcher === undefined ? {} : { dispatcher } as RequestInit,
+      })
+      if (!response.ok) {
+        throw new LlmError(
+          `models.dev catalog fetch failed (HTTP ${response.status})`,
+          httpErrorCode(response.status),
+          { status: response.status },
+        )
+      }
+      api = await response.json() as ModelsDevApi
+    } catch (error: unknown) {
+      if (error instanceof LlmError) throw error
+      if (signal.aborted) throw error
+      throw new LlmError('models.dev catalog fetch failed', 'TRANSPORT', { cause: error })
+    } finally {
+      void dispatcher?.close().catch(() => {})
+    }
+    return {
+      models: request.modelIds.map(id => ({ id, matches: matchModelsDev(api, id) })),
+    }
   }
 
   async * stream(options: GenerateOptions): AsyncIterable<StreamChunk> {

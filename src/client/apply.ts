@@ -13,6 +13,7 @@ import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client
 import { NewApiSection } from './NewApiSection.tsx'
 import type { NewApiKey } from './locale.ts'
 import { en, zh } from './locale.ts'
+import type { ModelsDevParamsRequest, ModelsDevParamsResponse } from './params-types.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -130,6 +131,34 @@ const SECTION_CSS = `
 .newapi-addmodel:disabled { opacity: 0.4; cursor: default; }
 .newapi-candidates { border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; padding: 12px; margin-bottom: 12px; }
 .newapi-candidates ul { list-style: none; padding: 0; margin: 8px 0; }
+/* Proxy control + models.dev params panel. */
+.newapi-proxyrow {
+  display: flex; flex-direction: row; align-items: center; flex-wrap: wrap;
+  gap: 8px; margin-bottom: 12px;
+}
+.newapi-proxyrow label { display: inline-flex; align-items: center; gap: 6px; color: var(--dsw-alias-label-primary); }
+.newapi-select {
+  box-sizing: border-box; padding: 6px 10px; border-radius: 8px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font: inherit; font-size: 13px; max-width: 220px;
+}
+.newapi-params {
+  border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px;
+  padding: 12px; margin-bottom: 12px;
+}
+.newapi-params-summary { margin: 6px 0 10px; color: var(--dsw-alias-label-tertiary); font-size: 12px; }
+.newapi-params-row {
+  display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto;
+  align-items: center; gap: 8px; padding: 4px 0;
+}
+.newapi-params-id { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.newapi-params-values {
+  color: var(--dsw-alias-label-tertiary); font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.newapi-params-unmatched { color: var(--dsw-alias-label-dimmed); font-size: 12px; padding: 4px 0; }
 `
 
 /** Required services (cordis fiber inject): the section slot, copy, and the wire face. */
@@ -155,11 +184,19 @@ export function apply(ctx: ClientContext): void {
   const connection = ctx.get('connection') as ConnectionHandle
   const t = ctx.locale.bind(NS) as (key: NewApiKey) => string
 
+  // One plain callback over the plugin's host RPC channel: the browser names
+  // the gateway model ids (and the proxy draft) and the host downloads
+  // https://models.dev/api.json — no cross-origin fetch in the browser.
+  const fetchModelParams = (request: ModelsDevParamsRequest) =>
+    connection.rpc.call('/llm-newapi', 'models-dev-params', request) as Promise<
+      { ok: true; value: ModelsDevParamsResponse } | { ok: false; error: { message: string } }
+    >
+
   ctx.slots.inject('settings.section', () => ctx.slots.register({
     name: 'settings.section',
     id: 'newapi',
     order: 15,
     label: () => t('nav'),
-    inject: () => ({ api: connection.api, t }),
+    inject: () => ({ api: connection.api, t, fetchModelParams }),
   }, NewApiSection))
 }

@@ -16,7 +16,7 @@ import z from '@deepseek-ai/schemastery';
 import type { RetryPolicyConfig } from '@deepseek-ai/dsh-llm';
 import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment';
 import type { NewApiCatalogModel, NewApiConnectionOptions } from './adapter.ts';
-export { DEFAULT_CONTEXT_WINDOW, DEFAULT_MODEL_EXCLUDE_PATTERNS, DEFAULT_STREAM_IDLE_TIMEOUT_MS, NewApiAdapter, normalizeBaseUrl, PKG, } from './adapter.ts';
+export { DEFAULT_CONTEXT_WINDOW, DEFAULT_MODEL_EXCLUDE_PATTERNS, DEFAULT_STREAM_IDLE_TIMEOUT_MS, matchModelsDev, NewApiAdapter, normalizeBaseUrl, PKG, } from './adapter.ts';
 export type { NewApiAdapterOptions, NewApiCatalogModel, NewApiConnectionOptions } from './adapter.ts';
 export type * from './types.ts';
 export declare const name = "llm-newapi";
@@ -52,9 +52,25 @@ export interface Config {
     maxTokens?: number;
     /** Maximum gateway idle time while one stream read is outstanding (default five minutes). */
     streamIdleTimeoutMs?: number;
+    /**
+     * Forward proxy for the models.dev catalog download performed by the
+     *「更新模型信息」action: disabled by default; when enabled, that one
+     * request is routed through `proxy.url` (a plain HTTP forward proxy).
+     * Gateway traffic is untouched.
+     */
+    proxy?: ProxyConfig;
     /** Provider-owned model-request retry policy; omission uses normal defaults. */
     retryPolicy?: RetryPolicyConfig;
 }
+/** Forward-proxy settings for the models.dev catalog download. */
+export interface ProxyConfig {
+    /** Whether the proxy is used; defaults to false. */
+    enabled?: boolean;
+    /** Proxy URL; presets default to `http://127.0.0.1:7890`. */
+    url?: string;
+}
+/** Default forward proxy: the conventional Clash port on loopback. */
+export declare const DEFAULT_PROXY_URL = "http://127.0.0.1:7890";
 export declare const Config: z<Config>;
 /**
  * One resolution's complete request facts. Connection and credential facts
