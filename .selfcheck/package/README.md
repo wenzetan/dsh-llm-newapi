@@ -26,13 +26,13 @@ dsh plugin --profile web add "github:wenzetan/dsh-llm-newapi"
 # 3. 重启 dsh web
 ```
 
-更新：重跑第 1 步后重启即可。锁定版本改用 tag 引用：`github:wenzetan/dsh-llm-newapi#v0.5.3`。
+更新：重跑第 1 步后重启即可。锁定版本改用 tag 引用：`github:wenzetan/dsh-llm-newapi#v0.5.2`。
 
 **方式 B：Release tarball（免 GitHub 克隆）**
 
 ```sh
 dsh plugin --profile web add \
-  https://github.com/wenzetan/dsh-llm-newapi/releases/download/v0.5.3/dsh-llm-newapi-0.5.3.tgz
+  https://github.com/wenzetan/dsh-llm-newapi/releases/download/v0.5.2/dsh-llm-newapi-0.5.2.tgz
 # 同方式 A 的第 2、3 步
 ```
 
@@ -91,8 +91,6 @@ npm test                       # cordis 实挂载 smoke：注册面 + chat-only 
 改源码后须重跑 `npm run build` 并**提交 `lib/`**——`github:` 安装从提交的产物运行，CI 的「Committed artifacts are current」步骤会在产物过期时拒绝。
 
 ## 状态
-
-v0.5.3：修复生产安装丢 undici——undici 此前同时出现在 dependencies 与 devDependencies，`--omit=dev` 安装（CI 自包含门禁的干净目录）会把同名 devDep 整体剔除而非回退 prod 声明，导致打包产物在隔离环境下不可解析；从 devDependencies 移除后 CI 门禁转绿。CI 新增 boot 门禁：全局安装 dsh → 全新 DSH_HOME 用 `dsh plugin add` 装 tarball → 后台启动 `dsh web`，要求 ：3080 就绪、`/plugins/dsh-llm-newapi/client.js` 可取、`/llm-newapi/models-dev-params` 非 405。
 
 v0.5.2：修复「更新模型信息」HTTP 405——RPC 通道此前在 apply 里用急切 `ctx.get('connection')` 读取，插件挂载早于 web app 启动 connection 服务时拿到 `undefined` 而静默跳过注册；改用 `ctx.inject(['connection'], …)` 等服务就绪再注册（服务重载自动重跑），并以 smoke 场景固定「插件先挂载、服务后启动」的时序。
 
