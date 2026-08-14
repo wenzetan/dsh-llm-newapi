@@ -39,13 +39,13 @@
   ],
   "license": "MIT",
   "peerDependencies": {
-    "@deepseek-ai/cordis": ">=0.1.0-rc.0",
-    "@deepseek-ai/dsh-credentials": ">=0.1.0-rc.0",
-    "@deepseek-ai/dsh-launch-environment": ">=0.1.0-rc.0",
-    "@deepseek-ai/dsh-llm": ">=0.1.0-rc.0",
-    "@deepseek-ai/dsh-settings": ">=0.1.0-rc.0",
-    "@deepseek-ai/dsh-timeout": ">=0.1.0-rc.0",
-    "@deepseek-ai/schemastery": ">=1.0.0"
+    "@deepseek-ai/cordis": ">=4.0.1",
+    "@deepseek-ai/dsh-credentials": ">=0.0.1-rc.1",
+    "@deepseek-ai/dsh-launch-environment": ">=0.0.1-rc.3",
+    "@deepseek-ai/dsh-llm": ">=0.0.1-rc.1",
+    "@deepseek-ai/dsh-settings": ">=0.0.1-rc.1",
+    "@deepseek-ai/dsh-timeout": ">=0.0.1-rc.1",
+    "@deepseek-ai/schemastery": ">=3.18.1"
   },
   "dependencies": {
     "eventsource-parser": "^3.1.0"

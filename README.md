@@ -37,7 +37,7 @@
 
 **模型发现**：`GET {baseURL}/models`，只采纳可服务 chat-completions 的模型——embedding / rerank / ranker 家族按命名约定过滤（可配）。
 
-**Web 设置页**：应用 `patches/0001-ui-settings-models-curated-editor-layout-for-the-llm.patch`（dsh `ui-settings-models` 三处小改动 + README 措辞；基于 master `47f943859b`，对应分支 `llm-newapi-web-layout`）并重建 web bundle 后，Models 页的 NewAPI 行得到完整编辑卡——API key、baseURL、模型列表与「获取模型」按钮（发现请求经本插件过滤，只采纳 chat 模型）。未打补丁时该命名空间只有提示卡（发现服务仍可经 `api.llm.discoverModels` 编程调用）。背景与路线矩阵见 DESIGN.md §8。
+**Web 设置页（规划中，路线 D）**：本插件将升级为双面包——浏览器半经 `dsh.client` manifest 被 dsh web **运行时动态发现**（`ClientModuleRegistry` 扫描组合插件行），向 `settings.section` 多贡献 slot 注册自己的「NewAPI」设置页：API key、baseURL、模型列表与「获取模型」按钮（发现经本插件过滤，只采纳 chat 模型）。**零 dsh 修改**——不改 dsh 本身是本插件的硬约束（曾评估过的 dsh 补丁路线已否决撤销）。实证依据与组件规划见 DESIGN.md §8；在浏览器半落地前，发现服务已可经 `api.llm.discoverModels` 编程调用，模型可 settings.yaml 手填。
 
 ## 构建
 
