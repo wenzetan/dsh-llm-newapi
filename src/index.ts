@@ -325,11 +325,13 @@ export function apply(ctx: Context, config: Config): void {
   // the gateway model ids (and optionally the proxy draft) and the host
   // downloads https://models.dev/api.json — no cross-origin fetch happens in
   // the browser, and a plain HTTP forward proxy works because Node performs
-  // the request. Optional: without the connection service (headless hosts)
-  // there is simply no browser face to serve.
-  const connection = ctx.get('connection') as HostConnectionHandle | undefined
-  if (connection !== undefined) {
-    ctx.effect(() => connection.rpc.handle(
+  // the request. Registered through ctx.inject so it waits for the connection
+  // service and re-runs if that service reloads — an eager ctx.get here read
+  // undefined while the web app had not started the service yet, silently
+  // skipping the route (the browser then met the SPA fallback's 405).
+  ctx.inject(['connection'], (cctx) => {
+    const connection = cctx.get('connection') as HostConnectionHandle
+    cctx.effect(() => connection.rpc.handle(
       '/llm-newapi',
       (endpoint: string, payload: unknown, signal: AbortSignal) => {
         if (endpoint !== 'models-dev-params') {
@@ -344,7 +346,7 @@ export function apply(ctx: Context, config: Config): void {
       },
       { authority: 'loopback' },
     ), 'llm-newapi: models-dev RPC channel')
-  }
+  })
 
   installSettingsSection(ctx, NS, Config, config, {
     // Refuse an unserviceable section where it is written: without this a

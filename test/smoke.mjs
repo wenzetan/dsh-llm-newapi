@@ -222,4 +222,37 @@ function stubModelsListing() {
   )
 }
 
-console.log('smoke: llm-newapi registrations, chat-only discovery, credentials-service key, settings validation, ordering, display names, and models.dev matching OK')
+// ── Block E: the models-dev RPC channel registers once connection starts ──
+{
+  const ctx = new Context()
+  await ctx.plugin(LlmRuntime)
+  // The plugin mounts BEFORE the connection service — exactly the ordering
+  // that silently skipped the channel when it was read with an eager ctx.get.
+  await mountPlugin(ctx)
+
+  const registered = []
+  class FakeConnection extends Service {
+    constructor(child) { super(child, 'connection') }
+    get rpc() {
+      return {
+        handle: (channel, handler, options) => {
+          registered.push({ channel, handler, options })
+          return () => Promise.resolve()
+        },
+      }
+    }
+  }
+  await ctx.plugin(FakeConnection)
+
+  // The inject scope ran as soon as the service appeared.
+  assert.equal(registered.length, 1)
+  assert.equal(registered[0].channel, '/llm-newapi')
+  assert.equal(registered[0].options.authority, 'loopback')
+
+  // Unknown endpoints answer the error envelope without any network use.
+  const answer = await registered[0].handler('nope', {}, new AbortController().signal)
+  assert.equal(answer.ok, false)
+  assert.match(answer.error.message, /unknown endpoint nope/)
+}
+
+console.log('smoke: llm-newapi registrations, chat-only discovery, credentials-service key, settings validation, ordering, display names, models.dev matching, and deferred RPC channel OK')

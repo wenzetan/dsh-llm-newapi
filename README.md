@@ -26,13 +26,13 @@ dsh plugin --profile web add "github:wenzetan/dsh-llm-newapi"
 # 3. 重启 dsh web
 ```
 
-更新：重跑第 1 步后重启即可。锁定版本改用 tag 引用：`github:wenzetan/dsh-llm-newapi#v0.5.0`。
+更新：重跑第 1 步后重启即可。锁定版本改用 tag 引用：`github:wenzetan/dsh-llm-newapi#v0.5.2`。
 
 **方式 B：Release tarball（免 GitHub 克隆）**
 
 ```sh
 dsh plugin --profile web add \
-  https://github.com/wenzetan/dsh-llm-newapi/releases/download/v0.5.0/dsh-llm-newapi-0.5.0.tgz
+  https://github.com/wenzetan/dsh-llm-newapi/releases/download/v0.5.2/dsh-llm-newapi-0.5.2.tgz
 # 同方式 A 的第 2、3 步
 ```
 
@@ -91,6 +91,10 @@ npm test                       # cordis 实挂载 smoke：注册面 + chat-only 
 改源码后须重跑 `npm run build` 并**提交 `lib/`**——`github:` 安装从提交的产物运行，CI 的「Committed artifacts are current」步骤会在产物过期时拒绝。
 
 ## 状态
+
+v0.5.2：修复「更新模型信息」HTTP 405——RPC 通道此前在 apply 里用急切 `ctx.get('connection')` 读取，插件挂载早于 web app 启动 connection 服务时拿到 `undefined` 而静默跳过注册；改用 `ctx.inject(['connection'], …)` 等服务就绪再注册（服务重载自动重跑），并以 smoke 场景固定「插件先挂载、服务后启动」的时序。
+
+v0.5.1：undici 从 peerDependencies 移入 dependencies（宿主不提供 undici，`autoInstallPeers: false` 下 peer 解析不到导致整个插件树加载失败）；CI 新增自包含门禁——`npm pack` 产物解包到干净目录只装生产依赖，host bundle 的所有非宿主提供 bare import 必须可解析。
 
 v0.5：发现结果按 id 排序，`a/b` 形式 id 的显示名取最后一段（wire id 不变）；新增「更新模型信息」——浏览器把模型 id（与代理草稿）发给 host 半 RPC（`/llm-newapi` channel），由后端下载 `https://models.dev/api.json` 并按 id/末段匹配，返回 `limit.context`/`limit.output`；同名多供应商条目在结果面板由用户选择；应用时可选「覆盖」或「仅填空白」，未匹配行保持原值并计数提示。代理开关默认关闭、默认 `http://127.0.0.1:7890`，预置 7890/7897/10809 三个下拉项 + 自定义输入，启用状态与地址随设置段持久化（仅用于该下载，网关流量不走代理）。
 
