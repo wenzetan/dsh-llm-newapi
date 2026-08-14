@@ -103,3 +103,54 @@ describe('environment-supplied credential (read-only)', () => {
     await waitFor(() => { expect(screen.getByText(t('saved'))).toBeTruthy() })
   })
 })
+
+describe('model catalog', () => {
+  /** The models op of the first mutate call. */
+  function savedModels(api: ReturnType<typeof wireFace>): Array<Record<string, unknown>> {
+    return api.settings.mutate.mock.calls[0][0].ops
+      .find((op: { path: string[] }) => op.path[0] === 'models').value
+  }
+
+  it('folds capacities behind the row disclosure and adopts K/M entry', async () => {
+    const api = wireFace()
+    render(<NewApiSection api={api as never} t={t} />)
+
+    await waitFor(() => { expect(screen.getByLabelText(t('baseUrl'))).toBeTruthy() })
+    // Capacities are not on the row until its disclosure opens.
+    expect(screen.queryByLabelText(`${t('contextWindow')} 1`)).toBeNull()
+    fireEvent.click(screen.getByLabelText(`${t('modelAdvanced')} 1`))
+    const context = await waitFor(() => screen.getByLabelText(`${t('contextWindow')} 1`))
+    // 65536 is not a whole multiple of 1000, so it stays written out.
+    expect((context as HTMLInputElement).value).toBe('65536')
+
+    fireEvent.change(context, { target: { value: '256K' } })
+    fireEvent.click(screen.getByText(t('apply')))
+    await waitFor(() => { expect(api.settings.mutate).toHaveBeenCalledTimes(1) })
+    expect(savedModels(api)[0].contextWindow).toBe(256_000)
+  })
+
+  it('drops an emptied name instead of storing an empty string', async () => {
+    const api = wireFace()
+    render(<NewApiSection api={api as never} t={t} />)
+
+    const name = await waitFor(() => screen.getByLabelText(`${t('modelName')} 1`))
+    fireEvent.change(name, { target: { value: 'Renamed' } })
+    fireEvent.change(name, { target: { value: '' } })
+    fireEvent.click(screen.getByText(t('apply')))
+    await waitFor(() => { expect(api.settings.mutate).toHaveBeenCalledTimes(1) })
+    expect(savedModels(api)[0].name).toBeUndefined()
+  })
+
+  it('adds a row through the add-model action and refuses a save with an empty id', async () => {
+    const api = wireFace()
+    render(<NewApiSection api={api as never} t={t} />)
+
+    await waitFor(() => { expect(screen.getByText(t('addModel'))).toBeTruthy() })
+    fireEvent.click(screen.getByText(t('addModel')))
+    expect(screen.getByLabelText(`${t('modelId')} 2`)).toBeTruthy()
+
+    fireEvent.click(screen.getByText(t('apply')))
+    await waitFor(() => { expect(screen.getByText(new RegExp(t('modelIdRequired')))).toBeTruthy() })
+    expect(api.settings.mutate).not.toHaveBeenCalled()
+  })
+})

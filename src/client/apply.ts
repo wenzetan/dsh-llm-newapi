@@ -59,12 +59,77 @@ const SECTION_CSS = `
   color: var(--dsw-alias-label-primary-foreground);
 }
 .newapi-button--primary:hover:not(:disabled) { background: var(--dsw-alias-button-primary-hover); }
-.newapi-toolbar { display: flex; flex-direction: row; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-.newapi-row { display: grid; grid-template-columns: 2fr 2fr 1fr 1fr auto; gap: 8px; margin-bottom: 8px; align-items: center; }
-.newapi-candidates { border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; padding: 12px; margin-bottom: 12px; }
-.newapi-candidates ul { list-style: none; padding: 0; margin: 8px 0; }
 .newapi-error { color: var(--dsw-alias-state-error-primary); }
 .newapi-hint { font-size: 12px; color: var(--dsw-alias-label-tertiary); }
+/* Model catalog, mirroring ui-settings-models: one bordered entry per
+   model, id and display name on the row, capacities behind the row's own
+   disclosure. */
+.newapi-catalog {
+  display: flex; flex-direction: column; gap: 10px;
+  padding-top: 12px; margin-bottom: 12px;
+  border-top: 1px solid var(--dsw-alias-border-l2);
+}
+.newapi-catalog-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.newapi-catalog-title {
+  font-size: 12px; line-height: 18px; font-weight: 500;
+  color: var(--dsw-alias-label-secondary);
+}
+.newapi-linkbutton {
+  box-sizing: border-box; display: inline-flex; align-items: center;
+  height: 28px; padding: 0 10px; border: none; border-radius: 14px;
+  background: transparent; color: var(--dsw-alias-label-primary);
+  font: inherit; font-size: 12px; cursor: pointer;
+}
+.newapi-linkbutton:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); }
+.newapi-linkbutton:disabled { opacity: 0.4; cursor: default; }
+.newapi-empty { margin: 0; color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; }
+.newapi-entry {
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  padding: 6px;
+}
+.newapi-modelrow {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 6px;
+}
+/* Square, label-free affordances: the row's own inputs carry the meaning, so
+   the actions stay glyphs and announce themselves through aria-label. */
+.newapi-iconbutton {
+  box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border: none; border-radius: 6px;
+  background: transparent; color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+.newapi-iconbutton:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+.newapi-iconbutton:disabled { opacity: 0.4; cursor: default; }
+.newapi-iconbutton--danger:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover-danger);
+  color: var(--dsw-alias-state-error-primary);
+}
+.newapi-modeladvanced {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+  padding: 8px 4px 2px;
+}
+.newapi-modelfield { display: flex; flex-direction: column; gap: 4px; }
+.newapi-modelfield-label { color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; }
+.newapi-addmodel {
+  box-sizing: border-box; align-self: flex-start; display: inline-flex; align-items: center;
+  gap: 4px; height: 28px; padding: 0 10px;
+  border: 1px solid var(--dsw-alias-border-l2); border-radius: 14px;
+  background: transparent; color: var(--dsw-alias-label-primary);
+  font: inherit; font-size: 12px; cursor: pointer;
+}
+.newapi-addmodel:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); }
+.newapi-addmodel:disabled { opacity: 0.4; cursor: default; }
+.newapi-candidates { border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; padding: 12px; margin-bottom: 12px; }
+.newapi-candidates ul { list-style: none; padding: 0; margin: 8px 0; }
 `
 
 /** Required services (cordis fiber inject): the section slot, copy, and the wire face. */

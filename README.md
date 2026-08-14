@@ -26,13 +26,13 @@ dsh plugin --profile web add "github:wenzetan/dsh-llm-newapi"
 # 3. 重启 dsh web
 ```
 
-更新：重跑第 1 步后重启即可。锁定版本改用 tag 引用：`github:wenzetan/dsh-llm-newapi#v0.3.0`。
+更新：重跑第 1 步后重启即可。锁定版本改用 tag 引用：`github:wenzetan/dsh-llm-newapi#v0.4.0`。
 
 **方式 B：Release tarball（免 GitHub 克隆）**
 
 ```sh
 dsh plugin --profile web add \
-  https://github.com/wenzetan/dsh-llm-newapi/releases/download/v0.3.0/dsh-llm-newapi-0.3.0.tgz
+  https://github.com/wenzetan/dsh-llm-newapi/releases/download/v0.4.0/dsh-llm-newapi-0.4.0.tgz
 # 同方式 A 的第 2、3 步
 ```
 
@@ -91,5 +91,7 @@ npm test                       # cordis 实挂载 smoke：注册面 + chat-only 
 改源码后须重跑 `npm run build` 并**提交 `lib/`**——`github:` 安装从提交的产物运行，CI 的「Committed artifacts are current」步骤会在产物过期时拒绝。
 
 ## 状态
+
+v0.4：模型目录照官方 Models 页（`ModelListEditor`）重设计——每模型一张边框卡片（ID + 显示名称在行内），上下文窗口 / 输出上限折叠在行首 chevron 后，支持 K/M 缩写输入（`256K`→256000、`1M`→1000000）与逐字段输入缓冲；保存前本地校验（空 ID / 重复 ID / 容量不可解析即拒绝并点名行）；空状态提示与胶囊「添加模型」按钮；删除行时展开态与缓冲按行号重排。
 
 v0.3：API key 改为纯前端配置（固定凭证引用 `newapi`，移除 `apiKeyEnv` 配置与 env 回退）；设置页改用 `--dsw-alias-*` 设计令牌，亮/暗主题自适应；settings 写入点增加 validate 拒绝；`WireAssistantMessage.content` 类型收紧为 `string`。host 半（adapter + chat-only 过滤发现）+ 浏览器半（NewAPI 设置页）双面包不变；typecheck / build / smoke 全绿；产物入库 + CI 同步校验 + Release tarball。已知 npm rc 缺口用 overrides stub（见 DESIGN §8）。

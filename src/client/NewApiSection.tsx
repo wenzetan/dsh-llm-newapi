@@ -1,23 +1,117 @@
 /**
  * The NewAPI settings section: API key (write-only), gateway base URL, and
- * the model list with endpoint interrogation. Pure props — no ctx, no
+ * the model catalog with endpoint interrogation. Pure props — no ctx, no
  * contexts, no subscription machinery; everything arrives through the inject
  * face the apply closure owns (api wire face + bound translate). Styles come
  * from the fiber-scoped `newapi-*` stylesheet the apply closure injects; it
  * rides the shell's `--dsw-alias-*` tokens, so light and dark themes both
  * render correctly.
+ *
+ * The model catalog mirrors the official Models page (`ModelListEditor`):
+ * one bordered entry per model with id and display name on the row, the two
+ * token capacities behind the row's own disclosure, K/M-suffixed capacity
+ * entry, and per-field text buffers so a count is not rewritten mid-word.
  */
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { DiscoveredModelView, IApiClient, SettingsNamespaceView, SettingsPathOpView } from '@deepseek-ai/dsh-client-connection/client'
 import type { NewApiKey } from './locale.ts'
 
-/** One editable model row; capacities are optional free-form drafts. */
-interface ModelDraft {
-  id: string
-  name: string
-  contextWindow: string
-  maxTokens: string
+/**
+ * One catalog entry, structurally open like the official editors: a field
+ * this card does not edit survives being edited here rather than being
+ * dropped by a rebuild.
+ */
+type ModelDraft = Record<string, unknown>
+
+/** A row's text field, or the empty string when unset or not a string. */
+function textOf(model: ModelDraft, key: string): string {
+  const value = model[key]
+  return typeof value === 'string' ? value : ''
+}
+
+/** A row's numeric field, or `undefined` when unset or not a number. */
+function numberOf(model: ModelDraft, key: string): number | undefined {
+  const value = model[key]
+  return typeof value === 'number' ? value : undefined
+}
+
+/** The two token counts edited as K/M-suffixed text behind a row's disclosure. */
+type CapacityField = 'contextWindow' | 'maxTokens'
+
+/** Accepted capacity spellings: a decimal count with an optional K/M suffix. */
+const CAPACITY_PATTERN = /^(\d+(?:\.\d+)?)([km])?$/i
+
+/** Decimal suffix scales — `1M` is 1000K, matching how model capacities are quoted. */
+const CAPACITY_SCALE = { k: 1_000, m: 1_000_000 } as const
+
+/**
+ * Read a typed capacity, so a user can write `256K` or `1M` instead of
+ * counting zeroes. The stored value stays a plain token count.
+ * @param text - raw field text.
+ * @returns the count; `undefined` when blank (drop), `NaN` when unreadable.
+ */
+function parseCapacity(text: string): number | undefined {
+  const trimmed = text.trim()
+  if (trimmed.length === 0) return undefined
+  const match = CAPACITY_PATTERN.exec(trimmed)
+  if (match === null) return Number.NaN
+  const suffix = match[2]?.toLowerCase()
+  const scale = suffix === 'k' || suffix === 'm' ? CAPACITY_SCALE[suffix] : 1
+  const scaled = Number(match[1]) * scale
+  // A decimal multiple is exact in intent but not in binary floating point,
+  // so an integral intent snaps back.
+  const rounded = Math.round(scaled)
+  return Math.abs(scaled - rounded) < 1e-6 ? rounded : scaled
+}
+
+/**
+ * Spell a stored count back in the shortest form that survives a round trip
+ * through {@link parseCapacity}; a count that is not a whole number of
+ * thousands stays written out.
+ * @param value - stored capacity.
+ * @returns the field text.
+ */
+function formatCapacity(value: number): string {
+  if (!Number.isInteger(value) || value <= 0) return String(value)
+  if (value % CAPACITY_SCALE.m === 0) return `${String(value / CAPACITY_SCALE.m)}M`
+  if (value % CAPACITY_SCALE.k === 0) return `${String(value / CAPACITY_SCALE.k)}K`
+  return String(value)
+}
+
+/**
+ * What an empty capacity field is worth, shown as its placeholder: the
+ * adapter's route-level fallback (`defaultContextWindow` 128,000) spelled
+ * the way a person would say it. A hint, not a mirror — leaving the field
+ * blank keeps the adapter's default.
+ */
+const CAPACITY_HINT: Readonly<Record<CapacityField, string>> = {
+  contextWindow: '128K',
+  maxTokens: '8K',
+}
+
+/** Disclosure chevron; rotates to point down while its row is open. */
+function IconChevron({ open }: { open: boolean }): ReactNode {
+  return (
+    <svg
+      width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden
+      style={{ transform: open ? 'rotate(90deg)' : undefined, transition: 'transform 120ms ease' }}
+    >
+      <path d="M6 3.5L10.5 8L6 12.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+/** Removal glyph for one model row. */
+function IconTrash(): ReactNode {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <path
+        d="M2.5 4h11M6.5 4V2.5h3V4M4 4l.7 9a1 1 0 001 .9h4.6a1 1 0 001-.9L12 4M6.5 6.8v4.4M9.5 6.8v4.4"
+        stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"
+      />
+    </svg>
+  )
 }
 
 /** Inject face: the wire face and the bound translate. */
@@ -30,33 +124,18 @@ const NS = 'llm-newapi'
 /** Credential reference the host half resolves per request (see apply.ts). */
 const KEY_REF = 'newapi'
 
-function toDraft(source: unknown): ModelDraft[] {
-  const models = Array.isArray(source) ? source : []
-  return models.map((entry) => {
-    const model = (entry ?? {}) as Record<string, unknown>
-    return {
-      id: typeof model.id === 'string' ? model.id : '',
-      name: typeof model.name === 'string' ? model.name : '',
-      contextWindow: model.contextWindow === undefined ? '' : String(model.contextWindow),
-      maxTokens: model.maxTokens === undefined ? '' : String(model.maxTokens),
-    }
-  })
+/** Convert a stored section value into editable rows without dropping fields. */
+function toDrafts(source: unknown): ModelDraft[] {
+  if (!Array.isArray(source)) return []
+  return source.map(entry =>
+    typeof entry === 'object' && entry !== null && !Array.isArray(entry)
+      ? entry as ModelDraft
+      : {})
 }
 
-function capacity(text: string): number | undefined {
-  const trimmed = text.trim()
-  if (trimmed.length === 0) return undefined
-  const value = Number(trimmed)
-  return Number.isInteger(value) && value > 0 ? value : undefined
-}
-
-function toWire(models: readonly ModelDraft[]): unknown {
-  return models.map(model => ({
-    id: model.id.trim(),
-    ...model.name.trim().length > 0 ? { name: model.name.trim() } : {},
-    ...capacity(model.contextWindow) !== undefined ? { contextWindow: capacity(model.contextWindow) } : {},
-    ...capacity(model.maxTokens) !== undefined ? { maxTokens: capacity(model.maxTokens) } : {},
-  }))
+/** Buffer key for one capacity field; the row half moves when rows do. */
+function bufferKey(index: number, field: CapacityField): string {
+  return `${String(index)}:${field}`
 }
 
 /**
@@ -76,6 +155,14 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
   const [baseURL, setBaseURL] = useState('')
   const [keyDraft, setKeyDraft] = useState('')
   const [models, setModels] = useState<ModelDraft[]>([])
+  // Rows carry an id and a name; capacities stay folded behind the row's own
+  // disclosure rather than crowding every row with four inputs.
+  const [expanded, setExpanded] = useState<ReadonlySet<number>>(new Set())
+  // Capacities are edited as text, so a field's keystrokes are held here
+  // rather than re-derived from the parsed count on every change — that
+  // would rewrite `1000` to `1K` mid-word. One entry per field: a single
+  // buffer would be displaced by editing any other field.
+  const [editing, setEditing] = useState<ReadonlyMap<string, string>>(new Map())
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<string | undefined>(undefined)
   const [candidates, setCandidates] = useState<readonly DiscoveredModelView[] | undefined>(undefined)
@@ -101,7 +188,9 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
       const value = (section.value ?? {}) as Record<string, unknown>
       setRevision(section.revision)
       setBaseURL(typeof value.baseURL === 'string' ? value.baseURL : '')
-      setModels(toDraft(value.models))
+      setModels(toDrafts(value.models))
+      setExpanded(new Set())
+      setEditing(new Map())
       const credential = await api.credentials.describe({ refs: [KEY_REF] })
       if (credential.result.ok) {
         const view = credential.result.value.credentials[KEY_REF]
@@ -115,10 +204,6 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
     }
   }
 
-  const patchModel = (at: number, next: Partial<ModelDraft>): void => {
-    setModels(current => current.map((model, index) => index === at ? { ...model, ...next } : model))
-  }
-
   // The section interrogates the settings plane once on mount: the page the
   // slot renders must show the stored configuration, not an eternal ellipsis.
   useEffect(() => { void load() }, [])
@@ -128,7 +213,34 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
     void load()
   }
 
+  /**
+   * Refuse the save with a localized message when a row cannot be written:
+   * an empty or duplicate id, or capacity text that does not parse. The host
+   * re-judges the same constraints at the write; this names the row first.
+   */
+  const catalogProblem = (): string | undefined => {
+    const seen = new Set<string>()
+    for (const [index, model] of models.entries()) {
+      const id = textOf(model, 'id').trim()
+      if (id.length === 0) return `${t('modelIdRequired')} (${t('models')} ${String(index + 1)})`
+      if (seen.has(id)) return `${t('modelIdDuplicate')} (${id})`
+      seen.add(id)
+      for (const field of ['contextWindow', 'maxTokens'] as const) {
+        const buffer = editing.get(bufferKey(index, field))
+        if (buffer !== undefined && Number.isNaN(parseCapacity(buffer) ?? 0)) {
+          return `${t('capacityInvalid')} (${id} · ${t(field)})`
+        }
+      }
+    }
+    return undefined
+  }
+
   const save = async (): Promise<void> => {
+    const problem = catalogProblem()
+    if (problem !== undefined) {
+      setErrorText(problem)
+      return
+    }
     setBusy(true)
     setNotice(undefined)
     setErrorText(undefined)
@@ -137,7 +249,22 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
       const ops: SettingsPathOpView[] = []
       if (trimmedBase.length > 0) ops.push({ op: 'set', path: ['baseURL'], value: trimmedBase })
       else ops.push({ op: 'unset', path: ['baseURL'] })
-      ops.push({ op: 'set', path: ['models'], value: toWire(models) })
+      ops.push({
+        op: 'set',
+        path: ['models'],
+        value: models.map(model => {
+          const id = textOf(model, 'id').trim()
+          const name = textOf(model, 'name').trim()
+          const contextWindow = numberOf(model, 'contextWindow')
+          const maxTokens = numberOf(model, 'maxTokens')
+          return {
+            id,
+            ...name.length > 0 ? { name } : {},
+            ...contextWindow !== undefined ? { contextWindow } : {},
+            ...maxTokens !== undefined ? { maxTokens } : {},
+          }
+        }),
+      })
       const mutated = await api.settings.mutate({ ns: NS, ops, expectedRevision: revision })
       if (!mutated.result.ok) {
         setErrorText(mutated.result.error.message)
@@ -169,6 +296,7 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
       const key = keyDraft.trim()
       const response = await api.llm.discoverModels({
         settingsNs: NS,
+        provider: 'newapi',
         ...baseURL.trim().length > 0 ? { baseURL: baseURL.trim() } : {},
         ...key.length > 0 ? { apiKey: key } : {},
       })
@@ -181,7 +309,9 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
         setErrorText(t('fetchEmpty'))
         return
       }
-      const known = new Set(models.map(model => model.id.trim()).filter(id => id.length > 0))
+      // Everything already configured starts unchecked, so adopting a
+      // selection never silently rewrites a capacity the user corrected.
+      const known = new Set(models.map(model => textOf(model, 'id')))
       setCandidates(found)
       setPicked(new Set(found.filter(model => !known.has(model.id)).map(model => model.id)))
     } catch (error) {
@@ -193,15 +323,16 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
 
   const adopt = (): void => {
     if (candidates === undefined) return
-    const existing = new Map(models.map(model => [model.id.trim(), model]))
+    const existing = new Map(models.map(model => [textOf(model, 'id'), model]))
     for (const candidate of candidates) {
       if (!picked.has(candidate.id)) continue
+      // A row the user already tuned wins over the gateway's own numbers.
       if (existing.has(candidate.id)) continue
       existing.set(candidate.id, {
         id: candidate.id,
-        name: candidate.name ?? '',
-        contextWindow: candidate.contextWindow === undefined ? '' : String(candidate.contextWindow),
-        maxTokens: candidate.maxTokens === undefined ? '' : String(candidate.maxTokens),
+        ...candidate.name === undefined ? {} : { name: candidate.name },
+        ...candidate.contextWindow === undefined ? {} : { contextWindow: candidate.contextWindow },
+        ...candidate.maxTokens === undefined ? {} : { maxTokens: candidate.maxTokens },
       })
     }
     setModels([...existing.values()])
@@ -215,6 +346,64 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
       if (!next.delete(id)) next.add(id)
       return next
     })
+  }
+
+  /** Replace one row, dropping optional fields the edit emptied. */
+  const patch = (index: number, next: Record<string, string | number | undefined>): void => {
+    setModels(current => current.map((model, at) => {
+      if (at !== index) return model
+      const cleared = new Set(
+        Object.entries(next).filter(([, value]) => value === undefined || value === '').map(([key]) => key),
+      )
+      return Object.fromEntries(
+        Object.entries({ ...model, ...next }).filter(([key]) => !cleared.has(key)),
+      )
+    }))
+  }
+
+  const toggleExpanded = (index: number): void => {
+    setExpanded(current => {
+      const next = new Set(current)
+      if (!next.delete(index)) next.add(index)
+      return next
+    })
+  }
+
+  /** What a capacity field shows: the buffer while typing, else the stored count. */
+  const capacityText = (model: ModelDraft, index: number, field: CapacityField): string =>
+    editing.get(bufferKey(index, field))
+      ?? (numberOf(model, field) === undefined ? '' : formatCapacity(numberOf(model, field) as number))
+
+  const editCapacity = (index: number, field: CapacityField, text: string): void => {
+    setEditing(current => new Map(current).set(bufferKey(index, field), text))
+    patch(index, { [field]: parseCapacity(text) })
+  }
+
+  /** Drop one row's entries and shift the rows after it down, in one pass. */
+  const reindexOnRemove = (current: ReadonlyMap<string, string>, index: number): Map<string, string> => {
+    const next = new Map<string, string>()
+    for (const [key, value] of current) {
+      const at = Number(key.slice(0, key.indexOf(':')))
+      if (at === index) continue
+      // Only the row number moves; the field half of the key is untouched.
+      next.set(at > index ? key.replace(/^\d+/, String(at - 1)) : key, value)
+    }
+    return next
+  }
+
+  const removeModel = (index: number): void => {
+    setModels(current => current.filter((_model, at) => at !== index))
+    // Both stores are keyed by position, so every row after this one shifts
+    // down and would otherwise inherit its neighbour's state.
+    setExpanded(current => {
+      const next = new Set<number>()
+      for (const at of current) {
+        if (at < index) next.add(at)
+        else if (at > index) next.add(at - 1)
+      }
+      return next
+    })
+    setEditing(current => reindexOnRemove(current, index))
   }
 
   if (status === 'loading') return <section aria-label={t('nav')}><p>…</p></section>
@@ -259,16 +448,81 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
         />
       </div>
 
-      <div className="newapi-toolbar">
-        <strong>{t('models')}</strong>
-        <button type="button" className="newapi-button" disabled={busy} onClick={() => { void fetchModels() }}>
-          {busy ? t('fetching') : t('fetchModels')}
-        </button>
-        <button type="button" className="newapi-button" disabled={busy}
-          onClick={() => { setModels(current => [...current, { id: '', name: '', contextWindow: '', maxTokens: '' }]) }}>
+      <section className="newapi-catalog" aria-label={t('models')}>
+        <div className="newapi-catalog-head">
+          <span className="newapi-catalog-title">{t('models')}</span>
+          <button type="button" className="newapi-linkbutton" disabled={busy} onClick={() => { void fetchModels() }}>
+            {busy ? t('fetching') : t('fetchModels')}
+          </button>
+        </div>
+        {models.length === 0 ? <p className="newapi-empty">{t('modelsEmpty')}</p> : null}
+        {models.map((model, index) => (
+          <div key={index} className="newapi-entry">
+            <div className="newapi-modelrow">
+              <input
+                className="newapi-input" type="text" value={textOf(model, 'id')}
+                placeholder={t('modelId')} aria-label={`${t('modelId')} ${String(index + 1)}`}
+                onChange={(event) => { patch(index, { id: event.target.value }) }}
+              />
+              <input
+                className="newapi-input" type="text" value={textOf(model, 'name')}
+                placeholder={t('modelName')} aria-label={`${t('modelName')} ${String(index + 1)}`}
+                onChange={(event) => { patch(index, { name: event.target.value === '' ? undefined : event.target.value }) }}
+              />
+              <button
+                type="button" className="newapi-iconbutton"
+                aria-label={`${t('modelAdvanced')} ${String(index + 1)}`}
+                aria-expanded={expanded.has(index)}
+                title={t('modelAdvanced')}
+                onClick={() => { toggleExpanded(index) }}
+              >
+                <IconChevron open={expanded.has(index)} />
+              </button>
+              <button
+                type="button" className="newapi-iconbutton newapi-iconbutton--danger"
+                aria-label={`${t('removeModel')} ${String(index + 1)}`}
+                title={t('removeModel')}
+                onClick={() => { removeModel(index) }}
+              >
+                <IconTrash />
+              </button>
+            </div>
+            {expanded.has(index)
+              ? (
+                <div className="newapi-modeladvanced">
+                  <label className="newapi-modelfield">
+                    <span className="newapi-modelfield-label">{t('contextWindow')}</span>
+                    <input
+                      className="newapi-input" type="text" inputMode="numeric"
+                      value={capacityText(model, index, 'contextWindow')}
+                      placeholder={CAPACITY_HINT.contextWindow}
+                      aria-label={`${t('contextWindow')} ${String(index + 1)}`}
+                      onChange={(event) => { editCapacity(index, 'contextWindow', event.target.value) }}
+                    />
+                  </label>
+                  <label className="newapi-modelfield">
+                    <span className="newapi-modelfield-label">{t('maxTokens')}</span>
+                    <input
+                      className="newapi-input" type="text" inputMode="numeric"
+                      value={capacityText(model, index, 'maxTokens')}
+                      placeholder={CAPACITY_HINT.maxTokens}
+                      aria-label={`${t('maxTokens')} ${String(index + 1)}`}
+                      onChange={(event) => { editCapacity(index, 'maxTokens', event.target.value) }}
+                    />
+                  </label>
+                </div>
+              )
+              : null}
+          </div>
+        ))}
+        <button
+          type="button" className="newapi-addmodel"
+          disabled={busy}
+          onClick={() => { setModels(current => [...current, { id: '' }]) }}
+        >
           {t('addModel')}
         </button>
-      </div>
+      </section>
 
       {candidates === undefined ? null : (
         <div className="newapi-candidates">
@@ -296,27 +550,6 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
           </button>
         </div>
       )}
-
-      {models.map((model, index) => (
-        <div key={index} className="newapi-row">
-          <input className="newapi-input" aria-label={t('modelId')} value={model.id}
-            placeholder={t('modelId')}
-            onChange={(event) => { patchModel(index, { id: event.target.value }) }} />
-          <input className="newapi-input" aria-label={t('modelName')} value={model.name}
-            placeholder={t('modelName')}
-            onChange={(event) => { patchModel(index, { name: event.target.value }) }} />
-          <input className="newapi-input" aria-label={t('contextWindow')} value={model.contextWindow}
-            placeholder={t('contextWindow')} inputMode="numeric"
-            onChange={(event) => { patchModel(index, { contextWindow: event.target.value }) }} />
-          <input className="newapi-input" aria-label={t('maxTokens')} value={model.maxTokens}
-            placeholder={t('maxTokens')} inputMode="numeric"
-            onChange={(event) => { patchModel(index, { maxTokens: event.target.value }) }} />
-          <button type="button" className="newapi-button" aria-label={`${t('removeModel')} ${model.id}`}
-            onClick={() => { setModels(current => current.filter((_, at) => at !== index)) }}>
-            ✕
-          </button>
-        </div>
-      ))}
 
       <p className="newapi-hint">{t('modelHint')}</p>
 
