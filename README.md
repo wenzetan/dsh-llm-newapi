@@ -52,6 +52,8 @@ dsh plugin --profile web add link:$(pwd)
 # 同方式 A 的第 2、3 步；改码后重跑 npm run build、提交 lib/ 并重启 dsh web
 ```
 
+> **安装时的 missing peer 警告是预期行为，可忽略**：`react`/`cordis`/`dsh-llm`/`dsh-settings`/`schemastery` 等运行时由 dsh 宿主 app 提供，插件声明为 `peerDependencies` 正是要求“不要装自己的副本”；profile 的 `autoInstallPeers: false` 让 pnpm 静态报 missing。所有 dsh 插件安装时都会出现这行 WARN（dsh-at-file 等同款），安装成功不受影响。切勿手动安装该列表或开启 autoInstallPeers——会导致 cordis 服务双实例、插件静默失效。
+
 装好后：设置面板出现「NewAPI」页 → 填 API key 与网关地址（含 `/v1`）→「获取模型」拉取并勾选 chat 模型（embedding / rerank / ranker 自动过滤）→ 保存。模型选择器（composer）即出现 `newapi` 路由的模型。
 
 ## 配置（cordis.yml entry config；装机后 settings.yaml `llm-newapi:` 段热更新覆盖）
