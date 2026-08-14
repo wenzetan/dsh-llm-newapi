@@ -11,14 +11,13 @@
 
 ## 安装（dsh ≥ 0.1.0-rc）
 
-产物由 GitHub Actions 构建并发布（源码不含 `lib/`）：push/PR 跑 typecheck + smoke + build；`v*` tag 触发 Release，附 `npm pack` 的安装 tarball，配置了 `NPM_TOKEN` secret 时同时发 npm。
+构建产物（`lib/`）已提交入库——`github:` 简写从源码仓库安装（社区同款模式，如 dsh-at-file）；CI 校验产物与源码同步，`v*` tag 发布 `npm pack` tarball 到 Release（配置 `NPM_TOKEN` secret 时同时发 npm）。
 
-**方式 A：GitHub Release tarball（无需 npm 发布）**
+**方式 A：GitHub 简写（推荐）**
 
 ```sh
-# 1. 安装到 web profile（换成实际版本号的 Release 资产 URL）
-dsh plugin --profile web add \
-  https://github.com/wenzetan/dsh-llm-newapi/releases/download/v0.2.0/dsh-llm-newapi-0.2.0.tgz
+# 1. 安装到 web profile（跟随 main 分支 HEAD）
+dsh plugin --profile web add "github:wenzetan/dsh-llm-newapi"
 
 # 2. 注册 bundle：编辑 $DSH_HOME/profiles/web/package.json
 #    （默认 ~/.dsh/profiles/web/package.json），
@@ -27,20 +26,30 @@ dsh plugin --profile web add \
 # 3. 重启 dsh web
 ```
 
-**方式 B：npm（Release 流水线配置 NPM_TOKEN 后可用）**
+更新：重跑第 1 步后重启即可。锁定版本改用 tag 引用：`github:wenzetan/dsh-llm-newapi#v0.2.0`。
+
+**方式 B：Release tarball（免 GitHub 克隆）**
+
+```sh
+dsh plugin --profile web add \
+  https://github.com/wenzetan/dsh-llm-newapi/releases/download/v0.2.0/dsh-llm-newapi-0.2.0.tgz
+# 同方式 A 的第 2、3 步
+```
+
+**方式 C：npm（Release 流水线配置 NPM_TOKEN 后可用）**
 
 ```sh
 dsh plugin --profile web add dsh-llm-newapi
 # 同方式 A 的第 2、3 步
 ```
 
-**方式 C：本地开发（link）**
+**方式 D：本地开发（link）**
 
 ```sh
 git clone https://github.com/wenzetan/dsh-llm-newapi && cd dsh-llm-newapi
 npm install && npm run build && npm test
 dsh plugin --profile web add link:$(pwd)
-# 同方式 A 的第 2、3 步；改码后重跑 npm run build 并重启 dsh web
+# 同方式 A 的第 2、3 步；改码后重跑 npm run build、提交 lib/ 并重启 dsh web
 ```
 
 装好后：设置面板出现「NewAPI」页 → 填 API key 与网关地址（含 `/v1`）→「获取模型」拉取并勾选 chat 模型（embedding / rerank / ranker 自动过滤）→ 保存。模型选择器（composer）即出现 `newapi` 路由的模型。
@@ -74,6 +83,8 @@ npm install && npm run build   # host: tsc 类型 + esbuild → lib/index.js；c
 npm test                       # cordis 实挂载 smoke：注册面 + chat-only 过滤 + fiber 释放
 ```
 
+改源码后须重跑 `npm run build` 并**提交 `lib/`**——`github:` 安装从提交的产物运行，CI 的「Committed artifacts are current」步骤会在产物过期时拒绝。
+
 ## 状态
 
-v0.2：双面包完成——host 半（adapter + chat-only 过滤发现）+ 浏览器半（NewAPI 设置页 + 获取模型）；typecheck / build / smoke 全绿。CI（GitHub Actions）构建并发布产物。已知 npm rc 缺口用 overrides stub（见 DESIGN §8）。
+v0.2：双面包完成——host 半（adapter + chat-only 过滤发现）+ 浏览器半（NewAPI 设置页 + 获取模型）；typecheck / build / smoke 全绿；产物入库 + CI 同步校验 + Release tarball。已知 npm rc 缺口用 overrides stub（见 DESIGN §8）。

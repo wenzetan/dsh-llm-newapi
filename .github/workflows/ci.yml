@@ -21,6 +21,12 @@ jobs:
         run: npm run typecheck
       - name: Build (lib/index.js + lib/client.js)
         run: npm run build
+      - name: Committed artifacts are current
+        run: |
+          git diff --exit-code -- lib/ || {
+            echo "::error::lib/ is stale — run 'npm run build' and commit the rebuilt artifacts (github: installs build from the committed lib/)"
+            exit 1
+          }
       - name: Smoke test (cordis composition over the built bundle)
         run: npm test
       - name: Pack distribution tarball
