@@ -27,7 +27,7 @@ jobs:
             echo "::error::lib/ is stale — run 'npm run build' and commit the rebuilt artifacts (github: installs build from the committed lib/)"
             exit 1
           }
-      - name: Smoke test (cordis composition over the built bundle)
+      - name: Tests (client component suite + cordis composition smoke)
         run: npm test
       - name: Pack distribution tarball
         run: npm pack

@@ -40,7 +40,8 @@
     "build:host": "tsc -p tsconfig.json && node scripts/build-host.mjs",
     "build:client": "node scripts/build-client.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.client.json",
-    "test": "node test/smoke.mjs"
+    "test": "npm run test:client && node test/smoke.mjs",
+    "test:client": "vitest run"
   },
   "keywords": [
     "dsh",
@@ -52,26 +53,34 @@
   ],
   "license": "MIT",
   "peerDependencies": {
-    "react": "^18.2.0",
     "@deepseek-ai/cordis": "^4.0.1",
     "@deepseek-ai/dsh-credentials": "*",
     "@deepseek-ai/dsh-launch-environment": "*",
     "@deepseek-ai/dsh-llm": "*",
     "@deepseek-ai/dsh-settings": "*",
     "@deepseek-ai/dsh-timeout": "*",
-    "@deepseek-ai/schemastery": "*"
+    "@deepseek-ai/schemastery": "*",
+    "react": "^18.2.0"
   },
   "dependencies": {
     "eventsource-parser": "^3.1.0"
   },
   "devDependencies": {
-    "@types/react": "^18.2.0",
-    "esbuild": "^0.25.0",
-    "react": "^18.2.0",
+    "@deepseek-ai/cordis": "^4.0.1",
     "@deepseek-ai/dsh-client-connection": "0.0.1-rc.1",
     "@deepseek-ai/dsh-client-locale": "0.0.1-rc.1",
     "@deepseek-ai/dsh-client-runtime": "0.0.1-rc.1",
-    "@deepseek-ai/dsh-client-ui-settings": "0.0.1-rc.1"
+    "@deepseek-ai/dsh-client-ui-settings": "0.0.1-rc.1",
+    "@deepseek-ai/dsh-launch-environment": "^0.0.1-rc.3",
+    "@deepseek-ai/dsh-timeout": "^0.0.1-rc.1",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/react": "^18.2.0",
+    "esbuild": "^0.25.0",
+    "jsdom": "^29.1.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.3.1",
+    "vitest": "^4.1.10"
   },
   "overrides": {
     "@deepseek-ai/dsh-type-meta": "npm:@deepseek-ai/dsh-brand@0.0.1-rc.1",

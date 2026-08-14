@@ -4,7 +4,7 @@
  * contexts, no subscription machinery; everything arrives through the inject
  * face the apply closure owns (api wire face + bound translate).
  */
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import type { DiscoveredModelView, IApiClient, SettingsNamespaceView, SettingsPathOpView } from '@deepseek-ai/dsh-client-connection/client'
 import type { NewApiKey } from './locale.ts'
@@ -127,6 +127,10 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
   const patchModel = (at: number, next: Partial<ModelDraft>): void => {
     setModels(current => current.map((model, index) => index === at ? { ...model, ...next } : model))
   }
+
+  // The section interrogates the settings plane once on mount: the page the
+  // slot renders must show the stored configuration, not an eternal ellipsis.
+  useEffect(() => { void load() }, [])
 
   const saved = (text: string): void => {
     setNotice(text)

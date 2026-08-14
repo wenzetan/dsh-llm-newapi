@@ -1,0 +1,75 @@
+// @vitest-environment jsdom
+/**
+ * NewApiSection behavior over a scripted wire face. These tests assert
+ * user-visible outcomes (fields rendered, calls made) — never React internals.
+ */
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { NewApiSection } from '../../src/client/NewApiSection.tsx'
+import { en } from '../../src/client/locale.ts'
+
+afterEach(cleanup)
+
+const t = (key: keyof typeof en): string => en[key]
+
+/** A wire face answering one resolved llm-newapi section. */
+function wireFace(overrides: Partial<{
+  describeAnswer: unknown
+  credentialsAnswer: unknown
+}> = {}) {
+  return {
+    settings: {
+      describe: vi.fn(() => Promise.resolve({
+        result: {
+          ok: true,
+          value: overrides.describeAnswer ?? {
+            writable: true,
+            hasDocument: true,
+            namespaces: [{
+              ns: 'llm-newapi',
+              schema: {},
+              value: { baseURL: 'http://gw.local:3000/v1', models: [{ id: 'deepseek-chat', contextWindow: 65536 }] },
+              applies: 'live',
+              secrets: [],
+              revision: 7,
+            }],
+          },
+        },
+      })),
+      mutate: vi.fn(),
+    },
+    credentials: {
+      describe: vi.fn(() => Promise.resolve({
+        result: { ok: true, value: { credentials: { NEWAPI_API_KEY: { configured: true, writable: true } } } },
+      })),
+      set: vi.fn(),
+    },
+    llm: { discoverModels: vi.fn() },
+  }
+}
+
+describe('NewApiSection mount', () => {
+  it('loads the section on mount and renders the configuration form', async () => {
+    const api = wireFace()
+    render(<NewApiSection api={api as never} t={t} />)
+
+    // The form fields the user configures the provider through.
+    await waitFor(() => { expect(screen.getByLabelText(t('baseUrl'))).toBeTruthy() })
+    expect((screen.getByLabelText(t('baseUrl')) as HTMLInputElement).value)
+      .toBe('http://gw.local:3000/v1')
+    expect(screen.getByLabelText(t('keyInput'))).toBeTruthy()
+    expect(screen.getByText(t('fetchModels'))).toBeTruthy()
+    expect(screen.getByText(t('apply'))).toBeTruthy()
+
+    // The mount itself interrogated the settings plane.
+    expect(api.settings.describe).toHaveBeenCalledTimes(1)
+  })
+
+  it('names the missing namespace when the host has no llm-newapi section', async () => {
+    const api = wireFace({ describeAnswer: { writable: true, hasDocument: true, namespaces: [] } })
+    render(<NewApiSection api={api as never} t={t} />)
+
+    await waitFor(() => { expect(screen.getByText(new RegExp('not registered'))).toBeTruthy() })
+    expect(screen.getByText(t('retry'))).toBeTruthy()
+  })
+})
