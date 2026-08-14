@@ -37,7 +37,7 @@
 
 **模型发现**：`GET {baseURL}/models`，只采纳可服务 chat-completions 的模型——embedding / rerank / ranker 家族按命名约定过滤（可配）。
 
-**Web 设置页现状**（实证结论见 DESIGN.md §8）：dsh 官方 `ui-settings-models` 的「获取模型」按钮只对 `llm-deepseek` / `llm-pi-ai` 两个命名空间渲染；`llm-newapi` 命名空间在 Web Models 页暂只有提示卡（发现服务本身已注册，可经 `api.llm.discoverModels` 调用）。三条可选路线（含零代码的 pi-ai 预声明过渡、以及给 dsh 打 `newapi` 家族布局小补丁的终态）见 DESIGN.md §8 路线矩阵。
+**Web 设置页**：应用 `patches/0001-ui-settings-models-curated-editor-layout-for-the-llm.patch`（dsh `ui-settings-models` 三处小改动 + README 措辞；基于 master `47f943859b`，对应分支 `llm-newapi-web-layout`）并重建 web bundle 后，Models 页的 NewAPI 行得到完整编辑卡——API key、baseURL、模型列表与「获取模型」按钮（发现请求经本插件过滤，只采纳 chat 模型）。未打补丁时该命名空间只有提示卡（发现服务仍可经 `api.llm.discoverModels` 编程调用）。背景与路线矩阵见 DESIGN.md §8。
 
 ## 构建
 

@@ -134,7 +134,7 @@ Models 页编辑草稿时经 `ctx.llm.discoverModels('llm-newapi', { baseURL?, a
 | **B. pi-ai 预声明路由**（组合里给 `llm-pi-ai` 行 config 播种 `providers.newapi`，不写代码） | ✅（pi-ai 布局 + CustomProviderCard） | ❌（pi-ai 发现不过滤；采纳对话框手动取消勾选） | ✅（route key/displayName 来自 profile） | 一段 yaml；无过滤、无本插件任何代码 |
 | **C. 本插件 + dsh 核心小补丁**（`ui-settings-models` 增 `newapi` 家族布局：key + baseURL + ModelListEditor fetch） | ✅ | ✅ | ✅ | 维护一个 dsh 补丁（或上游化：把家族布局改为数据驱动） |
 
-三条路线互不完全排斥：B 可作今日过渡，C 是终态，A 的 Provider 侧代码在 C 下原样复用。
+**已选路线 C（v0.1 落地）**。补丁本体小得意外：`ProviderEditor` 的 else 分支（baseURL 回退占位、非 pi-ai 的 key 文案、`ModelListEditor` fetch）对 `newapi` 全部天然正确，因此只需三处改动——`EditorLayout` 联合类型加 `'newapi'`、`layoutOf` 加一行路由、`curatedFields` 家族参数加 `'newapi'`——外加 README 两处家族清单措辞。补丁以 `patches/0001-ui-settings-models-curated-editor-layout-for-the-llm.patch` 随本仓携带（dsh checkout 内分支 `llm-newapi-web-layout`，提交 `901e89f499`，基于 master `47f943859b`）；`git am` 应用后重建 web bundle 即在 Models 页得到完整编辑卡（key + baseURL + 模型列表 + 获取按钮），发现请求路由到本插件的 chat-only 过滤发现服务。
 
 ## 9. 已知取舍与后续（v0.1 范围外）
 
