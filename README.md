@@ -1,21 +1,49 @@
 # dsh-llm-newapi
 
-为 [DeepSeek Harness (dsh)](../deepseek-harness) 增加 LLM 供应商 **NewAPI** 的插件。
+为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（dsh）增加 LLM 供应商 **NewAPI** 的插件。**零 dsh 修改**。
 
 - 供应商 route id：`newapi`
 - 显示名称：`NewAPI`
 - 形态：LLM Provider 插件——实现 `@deepseek-ai/dsh-llm` 的 `LlmAdapter` seam；NewAPI 为 OpenAI 兼容网关（`POST {baseURL}/chat/completions`、`GET {baseURL}/models`，baseURL 含 `/v1`）
+- 双面包：host 半（adapter + 模型发现）+ 浏览器半（dsh web 设置面板中的「NewAPI」设置页，含「获取模型」）
 
 设计决策与差异分析见 [DESIGN.md](DESIGN.md)；参考实现 `deepseek-harness/packages/llm/llm-deepseek`。
 
-## 挂载
+## 安装（dsh ≥ 0.1.0-rc）
 
-```yaml
-# cordis.patch.yml（随包分发，dsh --profile 补丁层）
-- insert:
-    - id: llm-newapi
-      name: dsh-llm-newapi
+产物由 GitHub Actions 构建并发布（源码不含 `lib/`）：push/PR 跑 typecheck + smoke + build；`v*` tag 触发 Release，附 `npm pack` 的安装 tarball，配置了 `NPM_TOKEN` secret 时同时发 npm。
+
+**方式 A：GitHub Release tarball（无需 npm 发布）**
+
+```sh
+# 1. 安装到 web profile（换成实际版本号的 Release 资产 URL）
+dsh plugin --profile web add \
+  https://github.com/wenzetan/dsh-llm-newapi/releases/download/v0.2.0/dsh-llm-newapi-0.2.0.tgz
+
+# 2. 注册 bundle：编辑 $DSH_HOME/profiles/web/package.json
+#    （默认 ~/.dsh/profiles/web/package.json），
+#    在 dsh.profile.bundles 数组中加一行 "dsh-llm-newapi"
+
+# 3. 重启 dsh web
 ```
+
+**方式 B：npm（Release 流水线配置 NPM_TOKEN 后可用）**
+
+```sh
+dsh plugin --profile web add dsh-llm-newapi
+# 同方式 A 的第 2、3 步
+```
+
+**方式 C：本地开发（link）**
+
+```sh
+git clone https://github.com/wenzetan/dsh-llm-newapi && cd dsh-llm-newapi
+npm install && npm run build && npm test
+dsh plugin --profile web add link:$(pwd)
+# 同方式 A 的第 2、3 步；改码后重跑 npm run build 并重启 dsh web
+```
+
+装好后：设置面板出现「NewAPI」页 → 填 API key 与网关地址（含 `/v1`）→「获取模型」拉取并勾选 chat 模型（embedding / rerank / ranker 自动过滤）→ 保存。模型选择器（composer）即出现 `newapi` 路由的模型。
 
 ## 配置（cordis.yml entry config；装机后 settings.yaml `llm-newapi:` 段热更新覆盖）
 
@@ -37,9 +65,9 @@
 
 **模型发现**：`GET {baseURL}/models`，只采纳可服务 chat-completions 的模型——embedding / rerank / ranker 家族按命名约定过滤（可配）。
 
-**Web 设置页（已实现）**：插件为双面包——浏览器半经 `dsh.client` manifest 被 dsh web 运行时动态发现（`ClientModuleRegistry` 扫描组合插件行），向 `settings.section` 多贡献 slot 注册自己的「NewAPI」设置页：API key、baseURL、模型列表与「获取模型」按钮（发现经 host 半过滤，只采纳 chat 模型）。**零 dsh 修改**。注意这是设置面板中独立的「NewAPI」页（dsh 契约：功能自有设置页，加设置不改 shell），不嵌在官方 Models 页内部。
+**Web 设置页**：浏览器半经 `dsh.client` manifest 被 dsh web 运行时动态发现（`ClientModuleRegistry` 扫描组合插件行），向 `settings.section` 多贡献 slot 注册（dsh 契约：功能自有设置页，加设置不改 shell）。注意这是设置面板中独立的「NewAPI」页，不嵌在官方 Models 页内部。
 
-## 构建与测试
+## 构建与测试（本仓开发）
 
 ```sh
 npm install && npm run build   # host: tsc 类型 + esbuild → lib/index.js；client: closure-factory → lib/client.js
@@ -48,4 +76,4 @@ npm test                       # cordis 实挂载 smoke：注册面 + chat-only 
 
 ## 状态
 
-v0.2：双面包完成——host 半（adapter + chat-only 过滤发现）+ 浏览器半（NewAPI 设置页 + 获取模型）；typecheck / build / smoke 全绿。已知 npm rc 缺口用 overrides stub（见 DESIGN §8）。
+v0.2：双面包完成——host 半（adapter + chat-only 过滤发现）+ 浏览器半（NewAPI 设置页 + 获取模型）；typecheck / build / smoke 全绿。CI（GitHub Actions）构建并发布产物。已知 npm rc 缺口用 overrides stub（见 DESIGN §8）。

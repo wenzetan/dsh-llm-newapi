@@ -1,6 +1,6 @@
 {
   "name": "dsh-llm-newapi",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "NewAPI (OpenAI-compatible gateway) chat-completions adapter for the DeepSeek Harness LLM seam. Provider route id 'newapi', display name 'NewAPI'. Dual-face: host half registers the LLM adapter and chat-only model discovery; browser half adds a NewAPI settings section to dsh web.",
   "type": "module",
   "main": "lib/index.js",
@@ -52,13 +52,14 @@
   ],
   "license": "MIT",
   "peerDependencies": {
-    "@deepseek-ai/cordis": ">=4.0.1",
-    "@deepseek-ai/dsh-credentials": ">=0.0.1-rc.1",
-    "@deepseek-ai/dsh-launch-environment": ">=0.0.1-rc.3",
-    "@deepseek-ai/dsh-llm": ">=0.0.1-rc.1",
-    "@deepseek-ai/dsh-settings": ">=0.0.1-rc.1",
-    "@deepseek-ai/dsh-timeout": ">=0.0.1-rc.1",
-    "@deepseek-ai/schemastery": ">=3.18.1"
+    "react": "^18.2.0",
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-credentials": "*",
+    "@deepseek-ai/dsh-launch-environment": "*",
+    "@deepseek-ai/dsh-llm": "*",
+    "@deepseek-ai/dsh-settings": "*",
+    "@deepseek-ai/dsh-timeout": "*",
+    "@deepseek-ai/schemastery": "*"
   },
   "dependencies": {
     "eventsource-parser": "^3.1.0"
