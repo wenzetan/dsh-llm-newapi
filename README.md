@@ -23,14 +23,21 @@
 - id: llm-newapi
   name: dsh-llm-newapi
   config:
-    baseURL: http://gw.local:3000/v1   # 必填（或 env NEWAPI_BASE_URL），含 /v1 前缀
+    baseURL: http://gw.local:3000/v1   # 含 /v1 前缀；缺省回退 env NEWAPI_BASE_URL → 占位符
     # apiKeyEnv: NEWAPI_API_KEY        # 凭证引用，经 credentials seam 每请求解析
-    # models:                          # 建议性目录；默认空，用 Models 页「探测」拉取 /models
+    # models:                          # 建议性目录；默认空，用「获取模型」拉取 /models
     #   - id: deepseek-chat
     #     contextWindow: 65536
+    # modelExcludePatterns:            # 发现时的 chat-only 过滤（整体替换默认）
+    #   - embed                        #   默认 ['embed','rerank','ranker']（大小写不敏感 id 子串）
+    #   - rerank                       #   置 [] 关闭过滤；多能力 id（bge-m3）需自行补充
     # defaultContextWindow: 128000     # 目录未覆盖时的上下文容量
     # maxTokens: 8192                  # 缺省不发 max_tokens，用各上游默认
 ```
+
+**模型发现**：`GET {baseURL}/models`，只采纳可服务 chat-completions 的模型——embedding / rerank / ranker 家族按命名约定过滤（可配）。
+
+**Web 设置页现状**（实证结论见 DESIGN.md §8）：dsh 官方 `ui-settings-models` 的「获取模型」按钮只对 `llm-deepseek` / `llm-pi-ai` 两个命名空间渲染；`llm-newapi` 命名空间在 Web Models 页暂只有提示卡（发现服务本身已注册，可经 `api.llm.discoverModels` 调用）。三条可选路线（含零代码的 pi-ai 预声明过渡、以及给 dsh 打 `newapi` 家族布局小补丁的终态）见 DESIGN.md §8 路线矩阵。
 
 ## 构建
 

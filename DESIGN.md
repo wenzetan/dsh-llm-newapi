@@ -38,17 +38,18 @@ installSettingsSection(ctx, NS, Config, config, {...}) // settings.yaml 热更�
 
 `declared: true`：该路由完全由配置声明（网关部署，插件不内置任何模型事实）——正是 `LlmConfigurableProvider.declared` 字段文档描述的场景。
 
-## 3. 与 `llm-deepseek` 的关系：骨架同源，五处实质差异
+## 3. 与 `llm-deepseek` 的关系：骨架同源，六处实质差异
 
 NewAPI 与 DeepSeek 官方端点同为 OpenAI 兼容 chat-completions + SSE，故 transport 骨架（fetch + eventsource-parser + idleWatchdog、serialize/translate/sse 分层、per-request 连接快照、last-good 设置回退）全部沿用官方实现。实质差异：
 
 | # | 维度 | llm-deepseek | dsh-llm-newapi（本插件） | 理由 |
 |---|---|---|---|---|
-| 1 | baseURL | 可选，默认公共 API | **必填**（config 或 `NEWAPI_BASE_URL`，缺则 load 时 fail-loud；规范化去尾 `/`、校验 http(s)） | 每个NewAPI部署地址不同，无公共默认可言 |
+| 1 | baseURL | 可选，默认公共 API | 可选，默认 `NEWAPI_BASE_URL`（受信环境层）→ 占位符 `https://newapi.example.com/v1`；占位符上的首个请求以 TRANSPORT 失败并点名端点 | 每个 NewAPI 部署地址不同，无公共默认；占位符（而非 load 失败）保证插件可挂载、Models 页可配置该路由 |
 | 2 | thinking/effort | 顶层 `thinking` + `reasoning_effort` | **不发送任何推理控制字段**；`resolveModel` 不声明 `reasoning` 元数据 | DeepSeek 专属字段；异构上游轻则忽略重则 400。不声明 efforts ⇒ `resolveCallConfig` 在 I/O 前拒绝显式 effort，天然闭环 |
 | 3 | 模型目录 | 内置 V4 Flash/Pro | **默认空目录**（`models` config 可选配）+ **`GET /v1/models` 端点探测**（seam 的 `registerModelDiscovery` 正是为网关设计） | 网关模型集因部署而异；`/models` 是 NewAPI 原生能力 |
 | 4 | 遥测头 | `x-deepseek-harness-user-id` / session-id / compact | **只发 mandatory `attributionHeaders()`（User-Agent）**+ auth/accept/content-type | 第三方网关不应收到 harness 匿名 id；attribution 契约（不可抑制）仍遵守 |
 | 5 | maxTokens 默认 | 256,000 | **无默认**：`maxTokens` config 缺省则不上 wire、不 materialize `defaultMaxTokens` | 异构上游各有自身默认，统一数值必错某家 |
+| 6 | 发现过滤 | 无（固定目录） | **chat-only 过滤**：默认 `['embed','rerank','ranker']`（大小写不敏感 id 子串）；`modelExcludePatterns` 整体替换、`[]` 关闭；只作用于发现，手工目录不过滤 | NewAPI 把所有启用渠道都列进 `/models`，embedding/rerank 家族无法服务 chat-completions；OpenAI listing 形状无能力元数据，只能按命名约定（多能力 id 如 `bge-m3` 是已知漏网） |
 
 沿用不变的关键行为（都有官方实证注释背书）：
 
@@ -64,9 +65,10 @@ NewAPI 与 DeepSeek 官方端点同为 OpenAI 兼容 chat-completions + SSE，�
 
 | 字段 | 类型 | 默认 | 说明 |
 |---|---|---|---|
-| `baseURL` | string | —（必填，或 env `NEWAPI_BASE_URL`） | 网关地址，**含 `/v1`**，如 `http://gw.local:3000/v1`；去尾 `/`、须 http(s) |
+| `baseURL` | string | env `NEWAPI_BASE_URL` → 占位符 `https://newapi.example.com/v1` | 网关地址，**含 `/v1`**，如 `http://gw.local:3000/v1`；去尾 `/`、须 http(s)；占位符上的请求以 TRANSPORT 失败点名端点 |
 | `apiKeyEnv` | string | `NEWAPI_API_KEY` | 凭证引用（credential-ref role），每请求经 credentials seam 解析 |
 | `models` | catalog[] | `[]` | 建议性目录：`id` + 可选 `name/description/contextWindow/maxTokens` |
+| `modelExcludePatterns` | string[] | `['embed','rerank','ranker']` | 发现时的 chat-only 过滤（大小写不敏感 id 子串）；整体替换默认、`[]` 关闭；条目须非空 |
 | `defaultContextWindow` | int>0 | `128,000` | 目录未覆盖该模型时的上下文容量（部署事实，须按上游调） |
 | `maxTokens` | int>0 | —（无默认） | 缺省不发 `max_tokens`，让各上游自带默认生效 |
 | `streamIdleTimeoutMs` | int>0 | `300,000` | 单次流读挂起上限（watchdog） |
@@ -108,12 +110,37 @@ Models 页编辑草稿时经 `ctx.llm.discoverModels('llm-newapi', { baseURL?, a
 1. 端点取 `request.baseURL`（草稿）否则当前快照；两者皆空 → `INVALID_DISCOVERY`（由 seam 抛）。
 2. 凭证取 `request.apiKey`（一次性，harness 不存储）否则按快照走 `resolveApiKey`。
 3. `GET {base}/models`，Bearer + attribution，解析 `{ data: [{ id }] }`（OpenAI models.list 形状，NewAPI 原生支持）。
-4. 返回 `LlmDiscoveredModel[]`，用配置目录中同 id 条目增补 `contextWindow/maxTokens`（探测响应本身只有 id）。
+4. **chat-only 过滤**：id 命中 `modelExcludePatterns`（默认 `embed`/`rerank`/`ranker`，大小写不敏感子串）的条目被丢弃——网关列表无法声明能力，embedding/rerank 家族进了候选列表也只能在每次请求时失败。
+5. 返回 `LlmDiscoveredModel[]`，用配置目录中同 id 条目增补 `contextWindow/maxTokens`（探测响应本身只有 id）。
 
-## 8. 已知取舍与后续（v0.1 范围外）
+已知局限：命名约定无法识别多能力 id（如 `bge-m3` 既能 embed 又能 rerank，名字却两者皆不含）；部署已知此类 id 时用 `modelExcludePatterns` 补充。
+
+## 8. Web 设置页（Models）实证结论与路线决策 ⚠️
+
+本轮源码实证（`packages/client/ui-settings-models/`）的关键事实：
+
+1. **「获取模型」按钮只在两种命名空间出现**：`ModelListEditor`（fetch 按钮）仅被 `ProviderEditor` 的 `deepseek`/`pi-ai` 两种家族布局和 pi-ai 专属 `CustomProviderCard` 渲染；`layoutOf()` 硬编码只认 `llm-deepseek` / `llm-pi-ai`。
+2. **unknown 布局只有一行提示**：自定义命名空间（`llm-newapi`）的编辑卡不进 `curatedFields`——连 API key 输入框都没有，Submit 亦禁用。即：**本插件的 Provider 角色侧一切注册面都正确，Web Models 页却不会出现可用的编辑卡与获取按钮。**
+3. **浏览器 bundle 是构建期组装**：client UI 经 `dsh.client` manifest 打进 web-app bundle（`clientModules` 扫描），外部 npm 插件无法向已构建的 dsh web 运行时注入 UI。
+4. **`llm-pi-ai` 默认随 dsh-base 挂载（dormant）**，其发现服务原生支持 OpenAI 兼容 `GET {base}/models`（`openai-completions` 协议，含 4MB 上限、gateway 扩展字段读取），但**无 chat-only 过滤**。
+5. **settings 是 base 层 + 用户层路径级叠加**：组合 entry config 作 base，Web 编辑写路径级 ops 盖上；base 层播种的 profile 不会被用户编辑其他字段清掉。
+6. `api.llm.discoverModels` 是暴露给 web client 的 wire API——本插件的发现服务即便没有按钮，也可经 API/编程调用。
+
+### 路线矩阵（对两项硬需求：Web 有获取选项 + 只列 chat 模型）
+
+| 路线 | Web 获取按钮 | chat-only 过滤 | id/显示名 | 代价 |
+|---|---|---|---|---|
+| **A. 现状：仅本插件（自有命名空间）** | ❌（提示卡） | ✅ | ✅ | 零核心修改；模型靠 settings.yaml 手填或 API 调用 |
+| **B. pi-ai 预声明路由**（组合里给 `llm-pi-ai` 行 config 播种 `providers.newapi`，不写代码） | ✅（pi-ai 布局 + CustomProviderCard） | ❌（pi-ai 发现不过滤；采纳对话框手动取消勾选） | ✅（route key/displayName 来自 profile） | 一段 yaml；无过滤、无本插件任何代码 |
+| **C. 本插件 + dsh 核心小补丁**（`ui-settings-models` 增 `newapi` 家族布局：key + baseURL + ModelListEditor fetch） | ✅ | ✅ | ✅ | 维护一个 dsh 补丁（或上游化：把家族布局改为数据驱动） |
+
+三条路线互不完全排斥：B 可作今日过渡，C 是终态，A 的 Provider 侧代码在 C 下原样复用。
+
+## 9. 已知取舍与后续（v0.1 范围外）
 
 - **不变量伴侣包（`./invariant`）**：仓库内 `verify-package-invariants` 门禁约束 `packages/*/*`，外部插件不在其列；若日后入仓需补。
 - **图片输入**：chat-completions 路线声明 `inputModalities: ['text']`（负能力），序列化层显式拒绝 image block——与官方 adapter 同立场。
 - **多路由 profile**：单路由 `newapi` + settings 段内多 profile（`settingsPath` 深入）可支持同进程多网关；v0.1 单路由，`AdapterRegistrationHandle.replace([])` 已为空路由保留合法语义。
 - **上游自适应推理控制**：若上游全是 DeepSeek 系，可在 v0.1 后加可选 `compat: 'deepseek'` 开关恢复 `thinking`/`reasoning_effort` 字段；默认关闭。
+- **发现过滤的能力元数据**：若 NewAPI 未来在 listing 暴露类型字段（或走管理 API），`modelExcludePatterns` 命名约定可升级为能力判断。
 - **构建验证**：本脚手架未经 `npm install` + `tsc` 实编（沙箱 npm 缓存只读）；代码与官方 `llm-deepseek` 逐段同源，差异点已在 §3 列尽，安装依赖后应一次通过。

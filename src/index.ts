@@ -22,6 +22,7 @@ import { deepEqualJson, installSettingsSection, settingsNamespace } from '@deeps
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import {
   DEFAULT_CONTEXT_WINDOW,
+  DEFAULT_MODEL_EXCLUDE_PATTERNS,
   DEFAULT_STREAM_IDLE_TIMEOUT_MS,
   NewApiAdapter,
   normalizeBaseUrl,
@@ -31,6 +32,7 @@ import type { NewApiCatalogModel, NewApiConnectionOptions } from './adapter.ts'
 
 export {
   DEFAULT_CONTEXT_WINDOW,
+  DEFAULT_MODEL_EXCLUDE_PATTERNS,
   DEFAULT_STREAM_IDLE_TIMEOUT_MS,
   NewApiAdapter,
   normalizeBaseUrl,
@@ -46,24 +48,35 @@ const NS = settingsNamespace('llm-newapi')
 const DEFAULT_API_KEY_ENV = 'NEWAPI_API_KEY'
 /** Environment variable naming this provider's endpoint, honored only from trusted layers. */
 const BASE_URL_ENV = 'NEWAPI_BASE_URL'
+/** Placeholder gateway base used when neither config nor environment names one. */
+export const DEFAULT_BASE_URL = 'https://newapi.example.com/v1'
 /** The single provider route this plugin owns. */
 const PROVIDER = 'newapi'
 
 /**
  * Plugin config, validated by the same-named schemastery schema and doubling
  * as the `llm-newapi` settings-section shape. Every field is optional in
- * yml except `baseURL`, which must come from config or the trusted
- * environment (a gateway deployment has no public default): a missing API
- * key resolves through {@link Config.apiKeyEnv} at each request (a request
- * without any key fails with `MISSING_CREDENTIAL`, not at plugin load).
+ * yml: `baseURL` falls back to $NEWAPI_BASE_URL from a trusted environment
+ * layer, then the placeholder {@link DEFAULT_BASE_URL} — a request against
+ * the placeholder fails as TRANSPORT at first use, naming the endpoint to
+ * fix. A missing API key resolves through {@link Config.apiKeyEnv} at each
+ * request (a request without any key fails with `MISSING_CREDENTIAL`, not
+ * at plugin load).
  */
 export interface Config {
-  /** Gateway base including the `/v1` prefix; required unless $NEWAPI_BASE_URL is set in a trusted layer. */
+  /** Gateway base including the `/v1` prefix; defaults to $NEWAPI_BASE_URL from a trusted layer, then the placeholder `https://newapi.example.com/v1`. */
   baseURL?: string
   /** Credential reference (environment-variable name) resolved per request; defaults to `NEWAPI_API_KEY`. */
   apiKeyEnv?: string
   /** Advisory models shown by discovery consumers; defaults to none — a gateway's model set is deployment-specific. */
   models?: NewApiCatalogModel[]
+  /**
+   * Case-insensitive id substrings excluding discovered models that cannot
+   * serve chat completions (embedding, rerank, ranker families). Replaces the
+   * default {@link DEFAULT_MODEL_EXCLUDE_PATTERNS} list; an empty array
+   * disables filtering. The hand-curated {@link models} catalog is unaffected.
+   */
+  modelExcludePatterns?: string[]
   /** Positive context capacity used when the selected model has no exact value (default 128,000). */
   defaultContextWindow?: number
   /** Default per-request output cap; omission sends no cap and lets each upstream default apply. */
@@ -86,6 +99,7 @@ export const Config: z<Config> = z.object({
   baseURL: z.string(),
   apiKeyEnv: z.string().role('credential-ref').default(DEFAULT_API_KEY_ENV),
   models: z.array(catalogModel).default([]),
+  modelExcludePatterns: z.array(z.string()).default([...DEFAULT_MODEL_EXCLUDE_PATTERNS]),
   defaultContextWindow: z.number().step(1).min(1).default(DEFAULT_CONTEXT_WINDOW),
   maxTokens: z.number().step(1).min(1).max(Number.MAX_SAFE_INTEGER),
   streamIdleTimeoutMs: z.number().min(Number.MIN_VALUE).max(MAX_TIMER_DELAY_MS).default(DEFAULT_STREAM_IDLE_TIMEOUT_MS),
@@ -143,13 +157,18 @@ function resolveModels(models: readonly NewApiCatalogModel[] | undefined): NewAp
  * @returns validated connection facts plus the credential reference.
  */
 export function resolveAdapterOptions(config: Config, environment?: ReturnType<typeof launchEnvironmentOf>): ResolvedNewApiOptions {
-  const rawBase = config.baseURL
-    ?? environment?.get(BASE_URL_ENV)?.value
-  if (rawBase === undefined || rawBase.trim().length === 0) {
-    throw new Error(
-      `${PKG}: baseURL is required — set it in the plugin entry config (or settings section "llm-newapi:"),`
-        + ` or export ${BASE_URL_ENV} in the launching environment. It is the gateway address including the /v1 prefix, e.g. http://gw.local:3000/v1`,
-    )
+  // Absent everywhere is the placeholder, not a load failure: the plugin stays
+  // mountable so configuration surfaces can offer the route, and a request
+  // against the placeholder fails as TRANSPORT at first use, naming the
+  // endpoint to fix. A value someone actually typed must still be a usable
+  // http(s) URL, which normalizeBaseUrl enforces below.
+  const named = config.baseURL !== undefined && config.baseURL.trim().length > 0
+    ? config.baseURL
+    : environment?.get(BASE_URL_ENV)?.value
+  const rawBase = named !== undefined && named.trim().length > 0 ? named : DEFAULT_BASE_URL
+  const modelExcludePatterns = config.modelExcludePatterns ?? [...DEFAULT_MODEL_EXCLUDE_PATTERNS]
+  for (const pattern of modelExcludePatterns) {
+    if (pattern.length === 0) throw new Error(`${PKG}: modelExcludePatterns entries must be non-empty`)
   }
   if (config.defaultContextWindow !== undefined
     && (!Number.isInteger(config.defaultContextWindow) || config.defaultContextWindow <= 0)) {
@@ -172,6 +191,7 @@ export function resolveAdapterOptions(config: Config, environment?: ReturnType<t
     baseURL: normalizeBaseUrl(rawBase),
     apiKeyEnv: credentialRef(config.apiKeyEnv ?? DEFAULT_API_KEY_ENV),
     models: resolveModels(config.models),
+    modelExcludePatterns,
     defaultContextWindow,
     streamIdleTimeoutMs,
     retryPolicy: resolveRetryPolicy(config.retryPolicy, `${PKG}: retryPolicy`),

@@ -41,6 +41,19 @@ import type { WireError, WireModelList } from './types.ts'
 /** Prefix for adapter-raised diagnostics. */
 export const PKG = 'llm-newapi'
 
+/**
+ * Default case-insensitive id substrings excluding non-chat models from
+ * discovery. NewAPI gateways aggregate every enabled channel into
+ * `GET /models` — embedding (`text-embedding-*`) and rerank (`*rerank*`,
+ * `*reranker*`) families among them — and the OpenAI listing shape carries
+ * no capability metadata, so chat-compatibility filtering is naming-convention
+ * based. Name heuristics cannot catch every multi-capability id (`bge-m3`
+ * embeds and reranks under a bare name); `modelExcludePatterns` in config
+ * replaces this list for deployments that know better, and an empty array
+ * disables filtering entirely.
+ */
+export const DEFAULT_MODEL_EXCLUDE_PATTERNS: readonly string[] = ['embed', 'rerank', 'ranker']
+
 /** One optional model entry advertised by this adapter. */
 export interface NewApiCatalogModel {
   /** Wire model id accepted by the configured gateway. */
@@ -73,6 +86,13 @@ export interface NewApiConnectionOptions {
   apiKeyEnv: CredentialRef
   /** Advisory models exposed to discovery consumers; requests remain unrestricted. */
   models: readonly NewApiCatalogModel[]
+  /**
+   * Case-insensitive id substrings excluding discovered models that cannot
+   * serve chat completions; the hand-curated {@link models} catalog is never
+   * filtered. Defaults to {@link DEFAULT_MODEL_EXCLUDE_PATTERNS}; an empty
+   * array means no filtering.
+   */
+  modelExcludePatterns: readonly string[]
   /** Positive context capacity used when the selected model has no exact value. */
   defaultContextWindow: number
   /** Default per-request output cap; when absent, no cap is materialized or sent. */
@@ -267,9 +287,16 @@ export class NewApiAdapter extends LlmAdapter {
       throw new LlmError(`NewAPI model discovery from ${base} returned a malformed body`, 'MALFORMED_RESPONSE')
     }
     const catalog = new Map(connection.models.map(model => [model.id, model]))
+    const excludes = connection.modelExcludePatterns.map(pattern => pattern.toLowerCase())
     const models: LlmDiscoveredModel[] = []
     for (const entry of list.data ?? []) {
       if (typeof entry?.id !== 'string' || entry.id.length === 0) continue
+      // A gateway listing cannot say what a model can serve; the id's naming
+      // convention is the only signal, so non-chat families (embedding,
+      // rerank) are dropped here rather than offered for adoption as chat
+      // models that would fail every request.
+      const id = entry.id.toLowerCase()
+      if (excludes.some(pattern => id.includes(pattern))) continue
       const known = catalog.get(entry.id)
       models.push({
         id: entry.id,
