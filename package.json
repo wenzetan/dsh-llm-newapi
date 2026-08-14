@@ -1,0 +1,53 @@
+{
+  "name": "dsh-llm-newapi",
+  "version": "0.1.0",
+  "description": "NewAPI (OpenAI-compatible gateway) chat-completions adapter for the DeepSeek Harness LLM seam. Provider route id 'newapi', display name 'NewAPI'.",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "src",
+    "cordis.patch.yml",
+    "DESIGN.md",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "newapi",
+    "llm",
+    "provider",
+    "openai-compatible"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "@deepseek-ai/cordis": ">=0.1.0-rc.0",
+    "@deepseek-ai/dsh-credentials": ">=0.1.0-rc.0",
+    "@deepseek-ai/dsh-launch-environment": ">=0.1.0-rc.0",
+    "@deepseek-ai/dsh-llm": ">=0.1.0-rc.0",
+    "@deepseek-ai/dsh-settings": ">=0.1.0-rc.0",
+    "@deepseek-ai/dsh-timeout": ">=0.1.0-rc.0",
+    "@deepseek-ai/schemastery": ">=1.0.0"
+  },
+  "dependencies": {
+    "eventsource-parser": "^3.1.0"
+  }
+}

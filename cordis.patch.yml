@@ -1,0 +1,8 @@
+# dsh-llm-newapi bundle patch
+# 在 profile 组合中插入插件行：向 ctx.llm 注册 newapi 供应商路由
+# （host 层挂载，agent preset 不涉及；路由激活需 baseURL 配置，
+# 见 README「配置」）。
+
+- insert:
+    - id: llm-newapi
+      name: dsh-llm-newapi
