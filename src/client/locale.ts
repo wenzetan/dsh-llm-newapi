@@ -1,0 +1,68 @@
+/**
+ * Copy dictionaries for the NewAPI settings section. Product copy is Chinese
+ * first (the dsh web convention); English mirrors it.
+ */
+
+export const zh = {
+  nav: 'NewAPI',
+  intro: '配置 NewAPI 网关：API 密钥、网关地址与模型列表。模型发现只列出支持 chat 接口的模型。',
+  keyInput: 'API 密钥',
+  keyPlaceholder: '粘贴令牌；留空保持已存密钥不变',
+  keyStored: '已配置（不回显）',
+  keyMissing: '未配置',
+  baseUrl: '网关地址（含 /v1 前缀）',
+  baseUrlPlaceholder: 'http://gw.local:3000/v1',
+  models: '模型',
+  addModel: '添加模型',
+  removeModel: '删除该模型',
+  modelId: '模型 ID',
+  modelName: '显示名称',
+  contextWindow: '上下文窗口',
+  maxTokens: '输出上限',
+  fetchModels: '获取模型',
+  fetching: '正在询问网关…',
+  fetchEmpty: '网关没有列出可用的 chat 模型（embedding / rerank / ranker 已过滤）。',
+  fetchTitle: '选择要添加的模型',
+  fetchAdopt: '添加所选',
+  fetchCancel: '取消',
+  apply: '保存',
+  applying: '正在保存…',
+  saved: '已保存。',
+  loadFailed: '加载失败',
+  retry: '重试',
+  readOnly: '当前设置源只读，无法保存。',
+  modelHint: '发现结果按命名过滤非 chat 模型；可在 settings.yaml 的 llm-newapi: 段用 modelExcludePatterns 调整。',
+} as const
+
+export type NewApiKey = keyof typeof zh
+
+export const en: Record<NewApiKey, string> = {
+  nav: 'NewAPI',
+  intro: 'Configure the NewAPI gateway: API key, gateway base URL, and model list. Discovery lists chat-capable models only.',
+  keyInput: 'API key',
+  keyPlaceholder: 'Paste the token; leave blank to keep the stored key',
+  keyStored: 'Configured (never echoed)',
+  keyMissing: 'Not configured',
+  baseUrl: 'Gateway base URL (including /v1)',
+  baseUrlPlaceholder: 'http://gw.local:3000/v1',
+  models: 'Models',
+  addModel: 'Add model',
+  removeModel: 'Remove this model',
+  modelId: 'Model ID',
+  modelName: 'Display name',
+  contextWindow: 'Context window',
+  maxTokens: 'Max output tokens',
+  fetchModels: 'Fetch models',
+  fetching: 'Asking the gateway…',
+  fetchEmpty: 'The gateway listed no chat-capable models (embedding / rerank / ranker filtered out).',
+  fetchTitle: 'Choose models to add',
+  fetchAdopt: 'Add selected',
+  fetchCancel: 'Cancel',
+  apply: 'Save',
+  applying: 'Saving…',
+  saved: 'Saved.',
+  loadFailed: 'Load failed',
+  retry: 'Retry',
+  readOnly: 'The active settings source is read-only; nothing can be saved.',
+  modelHint: 'Discovery filters non-chat models by naming convention; tune modelExcludePatterns in the llm-newapi: settings section.',
+}

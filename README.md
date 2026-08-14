@@ -37,14 +37,15 @@
 
 **模型发现**：`GET {baseURL}/models`，只采纳可服务 chat-completions 的模型——embedding / rerank / ranker 家族按命名约定过滤（可配）。
 
-**Web 设置页（规划中，路线 D）**：本插件将升级为双面包——浏览器半经 `dsh.client` manifest 被 dsh web **运行时动态发现**（`ClientModuleRegistry` 扫描组合插件行），向 `settings.section` 多贡献 slot 注册自己的「NewAPI」设置页：API key、baseURL、模型列表与「获取模型」按钮（发现经本插件过滤，只采纳 chat 模型）。**零 dsh 修改**——不改 dsh 本身是本插件的硬约束（曾评估过的 dsh 补丁路线已否决撤销）。实证依据与组件规划见 DESIGN.md §8；在浏览器半落地前，发现服务已可经 `api.llm.discoverModels` 编程调用，模型可 settings.yaml 手填。
+**Web 设置页（已实现）**：插件为双面包——浏览器半经 `dsh.client` manifest 被 dsh web 运行时动态发现（`ClientModuleRegistry` 扫描组合插件行），向 `settings.section` 多贡献 slot 注册自己的「NewAPI」设置页：API key、baseURL、模型列表与「获取模型」按钮（发现经 host 半过滤，只采纳 chat 模型）。**零 dsh 修改**。注意这是设置面板中独立的「NewAPI」页（dsh 契约：功能自有设置页，加设置不改 shell），不嵌在官方 Models 页内部。
 
-## 构建
+## 构建与测试
 
 ```sh
-npm install && npm run build   # tsc → lib/（peerDeps 指向 @deepseek-ai/dsh-* 与 cordis）
+npm install && npm run build   # host: tsc 类型 + esbuild → lib/index.js；client: closure-factory → lib/client.js
+npm test                       # cordis 实挂载 smoke：注册面 + chat-only 过滤 + fiber 释放
 ```
 
 ## 状态
 
-v0.1 脚手架完成：src/ 六文件 + 配置 + 挂载补丁；与官方 adapter 逐段同源，差异点列于 DESIGN.md §3。
+v0.2：双面包完成——host 半（adapter + chat-only 过滤发现）+ 浏览器半（NewAPI 设置页 + 获取模型）；typecheck / build / smoke 全绿。已知 npm rc 缺口用 overrides stub（见 DESIGN §8）。

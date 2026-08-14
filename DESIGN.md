@@ -138,27 +138,29 @@ Models 页编辑草稿时经 `ctx.llm.discoverModels('llm-newapi', { baseURL?, a
 
 **决策记录**：C 曾短暂落地（三处类型/路由改动 + 双语 README，dsh 分支 `llm-newapi-web-layout`），用户裁定**独立插件不得修改 dsh 本身**后撤销——dsh checkout 已回干净 master，补丁文件已删除。正确归宿是把家族布局数据驱动的诉求**上游化**（向 dsh 提 issue/PR），而非自维护补丁。
 
-**已选路线 D**：插件升级为双面包——
+**已选路线 D（已落地）**：插件为双面包——
 
 ```
 dsh-llm-newapi/
-├── package.json          # 增 "dsh": { "client": { "inject": [...], "platform": "web" } } manifest
-│                         #   + exports "./client" → lib/client.js
+├── package.json          # "dsh": { "bundle": {patch}, "client": { platform:'web', inject:[…] } }
+│                         #   exports "./client" → lib/client.js（预构建随包分发）
 ├── src/
-│   ├── …（host 半，已完成：adapter/index/serialize/translate/sse/types）
-│   └── client/           # 浏览器半（新增）
+│   ├── …（host 半：adapter/index/serialize/translate/sse/types）
+│   └── client/           # 浏览器半
 │       ├── index.ts      # export { apply, inject }
-│       ├── apply.ts      # ctx.slots.inject('settings.section', () => register({ id:'newapi', order:15, label }, Section))
-│       ├── NewApiSection.tsx  # 编辑卡：API key（credentials.set 只写）、baseURL、模型列表 + 「获取模型」
-│       │                       # fetch → api.llm.discoverModels({ settingsNs:'llm-newapi', baseURL, apiKey })
-│       │                       # 写入 → api.settings.mutate({ ns:'llm-newapi', ops })（路径级，保 base 层）
-│       └── locale.ts     # ctx.locale.register('settings.newapi', { zh, en })
-└── scripts/build-client.mjs  # esbuild：closure-factory 包装（__ModuleLoader__.load），@deepseek-ai/* 全 external
+│       ├── apply.ts      # locale.register + slots.inject('settings.section', register({id:'newapi',order:15}))
+│       ├── NewApiSection.tsx  # 纯 props 组件：key（credentials.set 只写）、baseURL、
+│       │                       # 模型四列 + 「获取模型」（llm.discoverModels，chat-only 过滤在 host 半）
+│       │                       # + 候选勾选采纳；保存走 settings.mutate 路径级 ops
+│       └── locale.ts     # zh/en 文案（中文为主，dsh 惯例）
+├── scripts/build-host.mjs     # esbuild ESM bundle（deps external）→ lib/index.js
+├── scripts/build-client.mjs   # esbuild closure-factory（__ModuleLoader__.load + 模块表 externals）→ lib/client.js
+└── test/smoke.mjs             # cordis 实挂载：注册面 + chat-only 过滤（stub 网关）+ fiber 释放
 ```
 
-组件不重造 ModelListEditor 的复杂度（capacity 缓冲、reindex）：NewAPI 场景行数少，最小可用集 = id/name/contextWindow/maxTokens 四列 + 采纳候选勾选。遵守 client AGENTS 纪律：组件永不见 ctx（四 shares 纯 props）、locale 中文文案、无 ReactNode 值 prop。
+构建验证（2026-08）：host/client 双 typecheck 通过；双 bundle 产出（client.js 开头/结尾与官方 closure-factory 契约一致，externals 仅 react/react-jsx-runtime）；`node test/smoke.mjs` 绿——stub 网关 5 模型（含 embedding/reranker/Reranker）过滤后恰剩 2 个 chat 模型，auth 头与 URL 规范化（去尾 `/`）断言通过，fiber dispose 后注册表清空。
 
-**注意**：此为 NewAPI 专属设置页（侧栏多一项「NewAPI」），并非嵌进 Models 页内部——Models 页内部的家族布局由 dsh own，外部注入不进（事实 1）；`settings.section`（事实 3）是 dsh 提供的正规扩展点。
+**npm 现实约束（rc 阶段）**：dsh 已发布 rc 包的依赖树引用了四个未发布的包（`dsh-type-meta`/`dsh-compact`/`dsh-paths`/`dsh-user-interaction`），package.json 用 `overrides` 将其 stub 到零依赖的 `dsh-brand`（仅 devDep 类型链需要；运行时 bundle 不受影响，值依赖只有 react 与平台模块）。上游修复后可移除。
 
 ## 9. 已知取舍与后续（v0.1 范围外）
 
