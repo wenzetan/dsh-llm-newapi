@@ -341,8 +341,20 @@ export function apply(ctx: Context, config: Config): void {
           })
         }
         const request = payload as ModelsDevParamsRequest
+        // Failures answer as the error envelope, never a thrown value: the
+        // transport maps a thrown handler to an opaque HTTP 500, which hides
+        // the actual reason (unreachable endpoint, dead proxy) from the
+        // settings page that asked.
         return adapter.fetchModelsDevParams(request, signal)
           .then(value => ({ ok: true as const, value }))
+          .catch((error: unknown) => ({
+            ok: false as const,
+            error: {
+              code: 'internal' as const,
+              message: error instanceof Error ? error.message : String(error),
+              details: {},
+            },
+          }))
       },
       { authority: 'loopback' },
     ), 'llm-newapi: models-dev RPC channel')

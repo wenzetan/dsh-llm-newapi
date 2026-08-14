@@ -33,7 +33,7 @@ import type {
 } from '@deepseek-ai/dsh-llm'
 import type { CredentialRef } from '@deepseek-ai/dsh-credentials'
 import { idleWatchdog, timeoutOf } from '@deepseek-ai/dsh-timeout'
-import { ProxyAgent } from 'undici'
+import { fetch as undiciFetch, ProxyAgent } from 'undici'
 import { serializeRequest } from './serialize.ts'
 import { parseSse } from './sse.ts'
 import { translate } from './translate.ts'
@@ -420,11 +420,16 @@ export class NewApiAdapter extends LlmAdapter {
       : undefined
     let api: ModelsDevApi
     try {
-      const response = await fetch(MODELS_DEV_API_URL, {
+      // With a proxy the request MUST ride undici's own fetch: Node's global
+      // fetch brand-checks `dispatcher` against its INTERNAL undici instance
+      // and rejects a ProxyAgent minted by the npm package.
+      const request_ = {
         headers: { accept: 'application/json', ...attributionHeaders() },
         signal: AbortSignal.any([signal, AbortSignal.timeout(MODELS_DEV_TIMEOUT_MS)]),
-        ...dispatcher === undefined ? {} : { dispatcher } as RequestInit,
-      })
+      }
+      const response = dispatcher === undefined
+        ? await fetch(MODELS_DEV_API_URL, request_)
+        : await undiciFetch(MODELS_DEV_API_URL, { ...request_, dispatcher })
       if (!response.ok) {
         throw new LlmError(
           `models.dev catalog fetch failed (HTTP ${response.status})`,
@@ -436,7 +441,17 @@ export class NewApiAdapter extends LlmAdapter {
     } catch (error: unknown) {
       if (error instanceof LlmError) throw error
       if (signal.aborted) throw error
-      throw new LlmError('models.dev catalog fetch failed', 'TRANSPORT', { cause: error })
+      // Surface the underlying cause (DNS, refused, TLS, timeout) and name
+      // the remedy: this feature exists precisely for networks where
+      // models.dev is only reachable through the configured proxy.
+      const cause = error instanceof Error && error.cause instanceof Error
+        ? `: ${error.cause.message}`
+        : error instanceof Error ? `: ${error.message}` : ''
+      throw new LlmError(
+        `models.dev catalog fetch failed${cause} — if the direct route cannot reach models.dev, enable the proxy`,
+        'TRANSPORT',
+        { cause: error },
+      )
     } finally {
       void dispatcher?.close().catch(() => {})
     }

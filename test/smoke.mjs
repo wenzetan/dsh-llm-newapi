@@ -253,6 +253,21 @@ function stubModelsListing() {
   const answer = await registered[0].handler('nope', {}, new AbortController().signal)
   assert.equal(answer.ok, false)
   assert.match(answer.error.message, /unknown endpoint nope/)
+
+  // A failing catalog download answers the error envelope too — a thrown
+  // handler would surface as an opaque HTTP 500 at the transport.
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async () => { throw new TypeError('fetch failed', { cause: new Error('connect ENETUNREACH') }) }
+  let failure
+  try {
+    failure = await registered[0].handler('models-dev-params', { modelIds: ['x'] }, new AbortController().signal)
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+  assert.equal(failure.ok, false)
+  assert.match(failure.error.message, /models\.dev catalog fetch failed/)
+  assert.match(failure.error.message, /ENETUNREACH/)
+  assert.match(failure.error.message, /enable the proxy/)
 }
 
 console.log('smoke: llm-newapi registrations, chat-only discovery, credentials-service key, settings validation, ordering, display names, models.dev matching, and deferred RPC channel OK')
