@@ -2,10 +2,13 @@
  * The NewAPI settings section: API key (write-only), gateway base URL, and
  * the model list with endpoint interrogation. Pure props — no ctx, no
  * contexts, no subscription machinery; everything arrives through the inject
- * face the apply closure owns (api wire face + bound translate).
+ * face the apply closure owns (api wire face + bound translate). Styles come
+ * from the fiber-scoped `newapi-*` stylesheet the apply closure injects; it
+ * rides the shell's `--dsw-alias-*` tokens, so light and dark themes both
+ * render correctly.
  */
 import { useEffect, useState } from 'react'
-import type { CSSProperties, ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import type { DiscoveredModelView, IApiClient, SettingsNamespaceView, SettingsPathOpView } from '@deepseek-ai/dsh-client-connection/client'
 import type { NewApiKey } from './locale.ts'
 
@@ -24,26 +27,8 @@ export interface NewApiSectionProps {
 }
 
 const NS = 'llm-newapi'
-const KEY_REF = 'NEWAPI_API_KEY'
-
-const fieldStyle: CSSProperties = {
-  display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 12,
-}
-const inputStyle: CSSProperties = {
-  padding: '6px 8px', borderRadius: 6, border: '1px solid var(--dsw-alias-border, #444)',
-  background: 'var(--dsw-alias-input-bg, #1b1b1b)', color: 'inherit', fontSize: 13,
-}
-const buttonStyle: CSSProperties = {
-  padding: '6px 12px', borderRadius: 6, border: '1px solid var(--dsw-alias-border, #444)',
-  background: 'transparent', color: 'inherit', cursor: 'pointer', fontSize: 13,
-}
-const primaryButtonStyle: CSSProperties = {
-  ...buttonStyle, background: 'var(--dsw-alias-accent, #3b82f6)', borderColor: 'transparent',
-}
-const rowStyle: CSSProperties = {
-  display: 'grid', gridTemplateColumns: '2fr 2fr 1fr 1fr auto', gap: 8, marginBottom: 8,
-  alignItems: 'center',
-}
+/** Credential reference the host half resolves per request (see apply.ts). */
+const KEY_REF = 'newapi'
 
 function toDraft(source: unknown): ModelDraft[] {
   const models = Array.isArray(source) ? source : []
@@ -236,8 +221,8 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
   if (status === 'error') {
     return (
       <section aria-label={t('nav')}>
-        <p style={{ color: '#f87171' }}>{`${t('loadFailed')}: ${errorText ?? ''}`}</p>
-        <button type="button" style={buttonStyle} onClick={() => { void load() }}>{t('retry')}</button>
+        <p className="newapi-error">{`${t('loadFailed')}: ${errorText ?? ''}`}</p>
+        <button type="button" className="newapi-button" onClick={() => { void load() }}>{t('retry')}</button>
       </section>
     )
   }
@@ -247,15 +232,15 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
       <p>{t('intro')}</p>
       {notice === undefined ? null : <p role="status">{notice}</p>}
       {!writable ? <p>{t('readOnly')}</p> : null}
-      {errorText === undefined ? null : <p style={{ color: '#f87171' }}>{errorText}</p>}
+      {errorText === undefined ? null : <p className="newapi-error">{errorText}</p>}
 
-      <div style={fieldStyle}>
+      <div className="newapi-field">
         <label htmlFor="newapi-key">{t('keyInput')}</label>
         {/* The official ProviderEditor credential pattern: a read-only
             credential (launch environment) locks the input and the
             placeholder states the fact; no separate hint paragraph. */}
         <input
-          id="newapi-key" type="password" autoComplete="off" style={inputStyle}
+          id="newapi-key" type="password" autoComplete="off" className="newapi-input"
           disabled={keyLocked}
           placeholder={keyLocked
             ? t('keyEnvLocked')
@@ -265,30 +250,30 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
         />
       </div>
 
-      <div style={fieldStyle}>
+      <div className="newapi-field">
         <label htmlFor="newapi-base">{t('baseUrl')}</label>
         <input
-          id="newapi-base" type="text" style={inputStyle} placeholder={t('baseUrlPlaceholder')}
+          id="newapi-base" type="text" className="newapi-input" placeholder={t('baseUrlPlaceholder')}
           value={baseURL}
           onChange={(event) => { setBaseURL(event.target.value) }}
         />
       </div>
 
-      <div style={{ ...fieldStyle, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
+      <div className="newapi-toolbar">
         <strong>{t('models')}</strong>
-        <button type="button" style={buttonStyle} disabled={busy} onClick={() => { void fetchModels() }}>
+        <button type="button" className="newapi-button" disabled={busy} onClick={() => { void fetchModels() }}>
           {busy ? t('fetching') : t('fetchModels')}
         </button>
-        <button type="button" style={buttonStyle} disabled={busy}
+        <button type="button" className="newapi-button" disabled={busy}
           onClick={() => { setModels(current => [...current, { id: '', name: '', contextWindow: '', maxTokens: '' }]) }}>
           {t('addModel')}
         </button>
       </div>
 
       {candidates === undefined ? null : (
-        <div style={{ border: '1px solid var(--dsw-alias-border, #444)', borderRadius: 8, padding: 12, marginBottom: 12 }}>
+        <div className="newapi-candidates">
           <strong>{t('fetchTitle')}</strong>
-          <ul style={{ listStyle: 'none', padding: 0, margin: '8px 0' }}>
+          <ul>
             {candidates.map(model => (
               <li key={model.id}>
                 <label>
@@ -302,40 +287,40 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
               </li>
             ))}
           </ul>
-          <button type="button" style={primaryButtonStyle} disabled={picked.size === 0} onClick={adopt}>
+          <button type="button" className="newapi-button newapi-button--primary" disabled={picked.size === 0} onClick={adopt}>
             {t('fetchAdopt')}
           </button>
           {' '}
-          <button type="button" style={buttonStyle} onClick={() => { setCandidates(undefined); setPicked(new Set()) }}>
+          <button type="button" className="newapi-button" onClick={() => { setCandidates(undefined); setPicked(new Set()) }}>
             {t('fetchCancel')}
           </button>
         </div>
       )}
 
       {models.map((model, index) => (
-        <div key={index} style={rowStyle}>
-          <input style={inputStyle} aria-label={t('modelId')} value={model.id}
+        <div key={index} className="newapi-row">
+          <input className="newapi-input" aria-label={t('modelId')} value={model.id}
             placeholder={t('modelId')}
             onChange={(event) => { patchModel(index, { id: event.target.value }) }} />
-          <input style={inputStyle} aria-label={t('modelName')} value={model.name}
+          <input className="newapi-input" aria-label={t('modelName')} value={model.name}
             placeholder={t('modelName')}
             onChange={(event) => { patchModel(index, { name: event.target.value }) }} />
-          <input style={inputStyle} aria-label={t('contextWindow')} value={model.contextWindow}
+          <input className="newapi-input" aria-label={t('contextWindow')} value={model.contextWindow}
             placeholder={t('contextWindow')} inputMode="numeric"
             onChange={(event) => { patchModel(index, { contextWindow: event.target.value }) }} />
-          <input style={inputStyle} aria-label={t('maxTokens')} value={model.maxTokens}
+          <input className="newapi-input" aria-label={t('maxTokens')} value={model.maxTokens}
             placeholder={t('maxTokens')} inputMode="numeric"
             onChange={(event) => { patchModel(index, { maxTokens: event.target.value }) }} />
-          <button type="button" style={buttonStyle} aria-label={`${t('removeModel')} ${model.id}`}
+          <button type="button" className="newapi-button" aria-label={`${t('removeModel')} ${model.id}`}
             onClick={() => { setModels(current => current.filter((_, at) => at !== index)) }}>
             ✕
           </button>
         </div>
       ))}
 
-      <p style={{ fontSize: 12 }}>{t('modelHint')}</p>
+      <p className="newapi-hint">{t('modelHint')}</p>
 
-      <button type="button" style={primaryButtonStyle} disabled={busy || !writable} onClick={() => { void save() }}>
+      <button type="button" className="newapi-button newapi-button--primary" disabled={busy || !writable} onClick={() => { void save() }}>
         {busy ? t('applying') : t('apply')}
       </button>
     </section>

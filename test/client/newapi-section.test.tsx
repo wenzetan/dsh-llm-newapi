@@ -40,7 +40,7 @@ function wireFace(overrides: Partial<{
     },
     credentials: {
       describe: vi.fn(() => Promise.resolve({
-        result: { ok: true, value: overrides.credentialsAnswer ?? { credentials: { NEWAPI_API_KEY: { configured: true, writable: true } } } },
+        result: { ok: true, value: overrides.credentialsAnswer ?? { credentials: { newapi: { configured: true, writable: true } } } },
       })),
       set: vi.fn(() => Promise.resolve({ result: { ok: true, value: undefined } })),
     },
@@ -76,7 +76,7 @@ describe('NewApiSection mount', () => {
 
 describe('environment-supplied credential (read-only)', () => {
   const envCredential = {
-    credentials: { NEWAPI_API_KEY: { configured: true, writable: false, source: 'env' } },
+    credentials: { newapi: { configured: true, writable: false, source: 'env' } },
   }
 
   it('locks the key field with the launch-environment placeholder', async () => {

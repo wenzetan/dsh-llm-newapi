@@ -50,13 +50,14 @@ export type WireMessage =
   | WireToolMessage
 
 /**
- * Assistant-role history message. The harness replays `content: ""` (never
- * null) on tool-call-only turns — some gateways reject null — and sends null
- * only when the turn carried neither text nor tool calls.
+ * Assistant-role history message. The harness always replays a string
+ * `content` — `""` on tool-call-only and reasoning-only turns — because some
+ * gateways reject null outright and the live API rejects null-content/
+ * no-tool_calls assistant messages with a 400.
  */
 export interface WireAssistantMessage {
   role: 'assistant'
-  content: string | null
+  content: string
   /**
    * CoT passback for DeepSeek-family upstreams routed through the gateway:
    * REQUIRED on assistant turns that carried tool calls, ignored elsewhere

@@ -55,7 +55,7 @@ NewAPI 与 DeepSeek 官方端点同为 OpenAI 兼容 chat-completions + SSE，�
 
 - **每请求一次连接解析**：`options()` thunk + `resolveApiKey(connection)` 从同一快照取 key——端点与密钥永不跨代配对；in-flight 流不受配置变更影响。
 - **注册期捕获的唯一事实**是 retryPolicy：变更时 `registration.replace(['newapi'])` 原子换路由（不能 dispose+重注册，会发布空路由窗口）。
-- **凭证**：`ctx.get('credentials')` seam 优先，无 seam 回退 launch environment；缺 key 抛 `MISSING_CREDENTIAL`（load 不失败，首个请求失败）。
+- **凭证**（v0.3 起）：key 只经 `ctx.get('credentials')` seam 解析固定引用 `newapi`（web 设置页写 managed store），**无 env 回退**。credentials 服务自身的顶层只读层就是继承环境——`NEWAPI_API_KEY` 式引用会被环境同名变量遮蔽并锁死前端输入框，故引用名固定为 `newapi`。缺 key 抛 `MISSING_CREDENTIAL` 并指向设置页（load 不失败，首个请求失败）。
 - **序列化细节**：assistant 无文本 turn 回放 `content: ""`（绝不 null，部分网关 400）；`reasoning_content` 仅在 tool-call turn 回传（上游为 DeepSeek 系模型时的 passback 契约；其余 OpenAI 兼容端点忽略未知字段，实测安全）；tool 空输出回放 `'(no output)'`。
 - **流协议**：`[DONE]` 哨兵必须到达否则 `STREAM_CLOSED`；usage/finish 全部延迟到 `[DONE]` 后发出；`stop` 且零 block ⇒ `EMPTY_RESPONSE` 错误 finish。`reasoning_content` delta（上游 R1 系模型经 NewAPI 透传）→ reasoning block，翻译层原样支持。
 - **usage 映射**：`prompt_tokens` 含缓存命中，减去 `prompt_tokens_details.cached_tokens`（OpenAI 兼容拼法）保持 harness 不相交计数约定。
@@ -66,7 +66,7 @@ NewAPI 与 DeepSeek 官方端点同为 OpenAI 兼容 chat-completions + SSE，�
 | 字段 | 类型 | 默认 | 说明 |
 |---|---|---|---|
 | `baseURL` | string | env `NEWAPI_BASE_URL` → 占位符 `https://newapi.example.com/v1` | 网关地址，**含 `/v1`**，如 `http://gw.local:3000/v1`；去尾 `/`、须 http(s)；占位符上的请求以 TRANSPORT 失败点名端点 |
-| `apiKeyEnv` | string | `NEWAPI_API_KEY` | 凭证引用（credential-ref role），每请求经 credentials seam 解析 |
+| ~~`apiKeyEnv`~~ | —（已移除） | — | API 密钥不是配置项：固定经 credentials store 的 `newapi` 引用解析，唯一配置面是 web 设置页（见「凭证」更新） |
 | `models` | catalog[] | `[]` | 建议性目录：`id` + 可选 `name/description/contextWindow/maxTokens` |
 | `modelExcludePatterns` | string[] | `['embed','rerank','ranker']` | 发现时的 chat-only 过滤（大小写不敏感 id 子串）；整体替换默认、`[]` 关闭；条目须非空 |
 | `defaultContextWindow` | int>0 | `128,000` | 目录未覆盖该模型时的上下文容量（部署事实，须按上游调） |
@@ -74,7 +74,7 @@ NewAPI 与 DeepSeek 官方端点同为 OpenAI 兼容 chat-completions + SSE，�
 | `streamIdleTimeoutMs` | int>0 | `300,000` | 单次流读挂起上限（watchdog） |
 | `retryPolicy` | RetryPolicySchema | 官方默认 | 供应商侧重试策略 |
 
-显式 resolve 步骤 `resolveAdapterOptions(config, env)` 是唯一默认值/边界判定点（load 时与每个 settings 快照首用时各跑一次；坏快照保 last-good 并 log 一次）。
+显式 resolve 步骤 `resolveAdapterOptions(config, env)` 是唯一默认值/边界判定点，共三个调用面：load 时（fail loud）、每个 settings 快照首用时（坏快照保 last-good 并 log 一次）、以及 settings 写入点的 `validate` 钩子（schema 表达不了的约束在写入时拒绝——照 `llm-pi-ai` 的模式，避免「保存成功但静默沿用旧值」）。
 
 ## 5. 文件结构
 
@@ -148,10 +148,11 @@ dsh-llm-newapi/
 │   ├── …（host 半：adapter/index/serialize/translate/sse/types）
 │   └── client/           # 浏览器半
 │       ├── index.ts      # export { apply, inject }
-│       ├── apply.ts      # locale.register + slots.inject('settings.section', register({id:'newapi',order:15}))
-│       ├── NewApiSection.tsx  # 纯 props 组件：key（credentials.set 只写）、baseURL、
+│       ├── apply.ts      # locale.register + fiber 作用域 <style> 注入（--dsw-alias-* 令牌，亮暗自适应）
+│       │                  # + slots.inject('settings.section', register({id:'newapi',order:15}))
+│       ├── NewApiSection.tsx  # 纯 props 组件：key（credentials.set 只写，固定 ref 'newapi'）、baseURL、
 │       │                       # 模型四列 + 「获取模型」（llm.discoverModels，chat-only 过滤在 host 半）
-│       │                       # + 候选勾选采纳；保存走 settings.mutate 路径级 ops
+│       │                       # + 候选勾选采纳；保存走 settings.mutate 路径级 ops；样式类 newapi-*
 │       └── locale.ts     # zh/en 文案（中文为主，dsh 惯例）
 ├── scripts/build-host.mjs     # esbuild ESM bundle（deps external）→ lib/index.js
 ├── scripts/build-client.mjs   # esbuild closure-factory（__ModuleLoader__.load + 模块表 externals）→ lib/client.js

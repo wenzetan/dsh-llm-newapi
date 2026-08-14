@@ -26,13 +26,13 @@ dsh plugin --profile web add "github:wenzetan/dsh-llm-newapi"
 # 3. 重启 dsh web
 ```
 
-更新：重跑第 1 步后重启即可。锁定版本改用 tag 引用：`github:wenzetan/dsh-llm-newapi#v0.2.0`。
+更新：重跑第 1 步后重启即可。锁定版本改用 tag 引用：`github:wenzetan/dsh-llm-newapi#v0.3.0`。
 
 **方式 B：Release tarball（免 GitHub 克隆）**
 
 ```sh
 dsh plugin --profile web add \
-  https://github.com/wenzetan/dsh-llm-newapi/releases/download/v0.2.0/dsh-llm-newapi-0.2.0.tgz
+  https://github.com/wenzetan/dsh-llm-newapi/releases/download/v0.3.0/dsh-llm-newapi-0.3.0.tgz
 # 同方式 A 的第 2、3 步
 ```
 
@@ -63,7 +63,6 @@ dsh plugin --profile web add link:$(pwd)
   name: dsh-llm-newapi
   config:
     baseURL: http://gw.local:3000/v1   # 含 /v1 前缀；缺省回退 env NEWAPI_BASE_URL → 占位符
-    # apiKeyEnv: NEWAPI_API_KEY        # 凭证引用，经 credentials seam 每请求解析
     # models:                          # 建议性目录；默认空，用「获取模型」拉取 /models
     #   - id: deepseek-chat
     #     contextWindow: 65536
@@ -74,9 +73,13 @@ dsh plugin --profile web add link:$(pwd)
     # maxTokens: 8192                  # 缺省不发 max_tokens，用各上游默认
 ```
 
+**API 密钥**：不是配置项——固定存于 credentials store 的 `newapi` 引用下，唯一配置面是 web 设置页（写后立即生效，每请求解析）。插件不从任何环境变量读 key：credentials 服务的顶层只读层就是继承环境，`NEWAPI_API_KEY` 式引用会被环境里同名变量遮蔽并锁死前端输入框，故引用名固定为 `newapi`。无密钥时首个请求以 `MISSING_CREDENTIAL` 失败并指向设置页，不在装载时报错。
+
 **模型发现**：`GET {baseURL}/models`，只采纳可服务 chat-completions 的模型——embedding / rerank / ranker 家族按命名约定过滤（可配）。
 
-**Web 设置页**：浏览器半经 `dsh.client` manifest 被 dsh web 运行时动态发现（`ClientModuleRegistry` 扫描组合插件行），向 `settings.section` 多贡献 slot 注册（dsh 契约：功能自有设置页，加设置不改 shell）。注意这是设置面板中独立的「NewAPI」页，不嵌在官方 Models 页内部。
+**Web 设置页**：浏览器半经 `dsh.client` manifest 被 dsh web 运行时动态发现（`ClientModuleRegistry` 扫描组合插件行），向 `settings.section` 多贡献 slot 注册（dsh 契约：功能自有设置页，加设置不改 shell）。注意这是设置面板中独立的「NewAPI」页，不嵌在官方 Models 页内部。输入框与按钮全部走 `--dsw-alias-*` 设计令牌（与官方 Models 页同配方），亮色 / 暗色主题自动适配。
+
+**配置校验**：settings 写入点即拒绝适配器无法服务的段（如非 http(s) 的 baseURL、空过滤条目）——schema 表达不了的约束在写入时报错，不会「保存成功但静默沿用旧值」。
 
 ## 构建与测试（本仓开发）
 
@@ -89,4 +92,4 @@ npm test                       # cordis 实挂载 smoke：注册面 + chat-only 
 
 ## 状态
 
-v0.2：双面包完成——host 半（adapter + chat-only 过滤发现）+ 浏览器半（NewAPI 设置页 + 获取模型）；typecheck / build / smoke 全绿；产物入库 + CI 同步校验 + Release tarball。已知 npm rc 缺口用 overrides stub（见 DESIGN §8）。
+v0.3：API key 改为纯前端配置（固定凭证引用 `newapi`，移除 `apiKeyEnv` 配置与 env 回退）；设置页改用 `--dsw-alias-*` 设计令牌，亮/暗主题自适应；settings 写入点增加 validate 拒绝；`WireAssistantMessage.content` 类型收紧为 `string`。host 半（adapter + chat-only 过滤发现）+ 浏览器半（NewAPI 设置页）双面包不变；typecheck / build / smoke 全绿；产物入库 + CI 同步校验 + Release tarball。已知 npm rc 缺口用 overrides stub（见 DESIGN §8）。

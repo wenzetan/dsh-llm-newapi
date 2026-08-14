@@ -29,15 +29,14 @@ export declare const DEFAULT_BASE_URL = "https://newapi.example.com/v1";
  * yml: `baseURL` falls back to $NEWAPI_BASE_URL from a trusted environment
  * layer, then the placeholder {@link DEFAULT_BASE_URL} — a request against
  * the placeholder fails as TRANSPORT at first use, naming the endpoint to
- * fix. A missing API key resolves through {@link Config.apiKeyEnv} at each
- * request (a request without any key fails with `MISSING_CREDENTIAL`, not
- * at plugin load).
+ * fix. The API key is not a config value at all: it lives in the
+ * credentials store under the fixed reference `newapi` (the web settings
+ * page writes it), and a request without any stored key fails with
+ * `MISSING_CREDENTIAL`, not at plugin load.
  */
 export interface Config {
     /** Gateway base including the `/v1` prefix; defaults to $NEWAPI_BASE_URL from a trusted layer, then the placeholder `https://newapi.example.com/v1`. */
     baseURL?: string;
-    /** Credential reference (environment-variable name) resolved per request; defaults to `NEWAPI_API_KEY`. */
-    apiKeyEnv?: string;
     /** Advisory models shown by discovery consumers; defaults to none — a gateway's model set is deployment-specific. */
     models?: NewApiCatalogModel[];
     /**

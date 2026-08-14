@@ -45,7 +45,15 @@ export const name = 'llm-newapi'
 export const inject = ['llm']
 
 const NS = settingsNamespace('llm-newapi')
-const DEFAULT_API_KEY_ENV = 'NEWAPI_API_KEY'
+/**
+ * Fixed credential reference for the gateway API key. Deliberately not an
+ * environment-variable-style name: the inherited process environment is the
+ * credentials service's read-only top layer, so an `NEWAPI_API_KEY`-style
+ * ref would let a stray exported variable shadow the web-stored key and lock
+ * the settings input read-only. `newapi` names the route, and the web
+ * settings page is the one configuration surface for the value.
+ */
+const API_KEY_REF = 'newapi'
 /** Environment variable naming this provider's endpoint, honored only from trusted layers. */
 const BASE_URL_ENV = 'NEWAPI_BASE_URL'
 /** Placeholder gateway base used when neither config nor environment names one. */
@@ -59,15 +67,14 @@ const PROVIDER = 'newapi'
  * yml: `baseURL` falls back to $NEWAPI_BASE_URL from a trusted environment
  * layer, then the placeholder {@link DEFAULT_BASE_URL} — a request against
  * the placeholder fails as TRANSPORT at first use, naming the endpoint to
- * fix. A missing API key resolves through {@link Config.apiKeyEnv} at each
- * request (a request without any key fails with `MISSING_CREDENTIAL`, not
- * at plugin load).
+ * fix. The API key is not a config value at all: it lives in the
+ * credentials store under the fixed reference `newapi` (the web settings
+ * page writes it), and a request without any stored key fails with
+ * `MISSING_CREDENTIAL`, not at plugin load.
  */
 export interface Config {
   /** Gateway base including the `/v1` prefix; defaults to $NEWAPI_BASE_URL from a trusted layer, then the placeholder `https://newapi.example.com/v1`. */
   baseURL?: string
-  /** Credential reference (environment-variable name) resolved per request; defaults to `NEWAPI_API_KEY`. */
-  apiKeyEnv?: string
   /** Advisory models shown by discovery consumers; defaults to none — a gateway's model set is deployment-specific. */
   models?: NewApiCatalogModel[]
   /**
@@ -97,7 +104,6 @@ const catalogModel: z<NewApiCatalogModel> = z.object({
 
 export const Config: z<Config> = z.object({
   baseURL: z.string(),
-  apiKeyEnv: z.string().role('credential-ref').default(DEFAULT_API_KEY_ENV),
   models: z.array(catalogModel).default([]),
   modelExcludePatterns: z.array(z.string()).default([...DEFAULT_MODEL_EXCLUDE_PATTERNS]),
   defaultContextWindow: z.number().step(1).min(1).default(DEFAULT_CONTEXT_WINDOW),
@@ -189,7 +195,7 @@ export function resolveAdapterOptions(config: Config, environment?: ReturnType<t
   const defaultContextWindow = config.defaultContextWindow ?? DEFAULT_CONTEXT_WINDOW
   return {
     baseURL: normalizeBaseUrl(rawBase),
-    apiKeyEnv: credentialRef(config.apiKeyEnv ?? DEFAULT_API_KEY_ENV),
+    apiKeyRef: credentialRef(API_KEY_REF),
     models: resolveModels(config.models),
     modelExcludePatterns,
     defaultContextWindow,
@@ -227,22 +233,18 @@ export function apply(ctx: Context, config: Config): void {
   const resolveApiKey = async (connection: ResolvedNewApiOptions): Promise<string> => {
     // Every credential fact comes from the caller's snapshot, so a rejected
     // settings generation cannot leak its key onto the previous endpoint.
-    const ref = connection.apiKeyEnv
+    // The credentials store is the only source: the web settings page owns
+    // the value, and this plugin deliberately reads no environment variable
+    // for it (a stray export must not shadow a web-configured key).
+    const ref = connection.apiKeyRef
     const credentials = ctx.get('credentials')
     if (credentials !== undefined) {
       const hit = await credentials.resolve(ref)
       if (hit !== undefined) return assertUsableApiKey(hit.value, PKG, ref)
-    } else {
-      // Without the seam there is no managed store to rank against, so the
-      // environment is the whole credential plane.
-      const ambient = launchEnvironmentOf(ctx).get(ref)
-      if (ambient !== undefined && ambient.value.length > 0) {
-        return assertUsableApiKey(ambient.value, PKG, ref)
-      }
     }
     throw new LlmError(
-      `${PKG}: no API key for provider route "${PROVIDER}"; store ${ref} through the credentials`
-        + ` service (the web Models page writes it), or export ${ref} in the launching environment`,
+      `${PKG}: no API key for provider route "${PROVIDER}"; configure it on the NewAPI`
+        + ` settings page in dsh web (credentials reference "${ref}")`,
       'MISSING_CREDENTIAL',
     )
   }
@@ -280,6 +282,13 @@ export function apply(ctx: Context, config: Config): void {
   ctx.llm.registerModelDiscovery(NS, request => adapter.discoverModels(request))
 
   installSettingsSection(ctx, NS, Config, config, {
+    // Refuse an unserviceable section where it is written: without this a
+    // schema-valid value the adapter cannot serve (a non-http(s) baseURL,
+    // an empty exclude-pattern entry) stores with a success notice and
+    // then silently keeps the last good facts at every request.
+    validate: (value) => {
+      resolveAdapterOptions(value, launchEnvironmentOf(ctx))
+    },
     setSource: (source) => {
       current = source
     },

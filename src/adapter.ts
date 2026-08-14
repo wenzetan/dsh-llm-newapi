@@ -80,10 +80,11 @@ export interface NewApiConnectionOptions {
   /**
    * Credential reference of this same resolution, resolved per request.
    * Travelling with the endpoint is the point: a request can never pair one
-   * generation's URL with another generation's secret. Configuration carries
-   * only this name — a literal key is not a configuration value.
+   * generation's URL with another generation's secret. The reference is the
+   * fixed id `newapi` — the web settings page owns the value, and a literal
+   * key is not a configuration value.
    */
-  apiKeyEnv: CredentialRef
+  apiKeyRef: CredentialRef
   /** Advisory models exposed to discovery consumers; requests remain unrestricted. */
   models: readonly NewApiCatalogModel[]
   /**
@@ -111,7 +112,7 @@ export interface NewApiAdapterOptions {
    * Resolve the bearer token for the connection facts of one request. The
    * snapshot is passed in — never re-read — so the key can only ever come
    * from the same resolution as the endpoint it is sent to. Throws `LlmError`
-   * `MISSING_CREDENTIAL` when no key is available anywhere.
+   * `MISSING_CREDENTIAL` when the credentials store holds no value.
    */
   resolveApiKey: (connection: NewApiConnectionOptions) => Promise<string>
 }
