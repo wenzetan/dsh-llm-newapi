@@ -86,6 +86,8 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
   const [revision, setRevision] = useState<number>(0)
   const [writable, setWritable] = useState(true)
   const [keyConfigured, setKeyConfigured] = useState<boolean | undefined>(undefined)
+  /** Whether the credential seam reports the key reference read-only (launch environment). */
+  const [keyLocked, setKeyLocked] = useState(false)
   const [baseURL, setBaseURL] = useState('')
   const [keyDraft, setKeyDraft] = useState('')
   const [models, setModels] = useState<ModelDraft[]>([])
@@ -116,7 +118,11 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
       setBaseURL(typeof value.baseURL === 'string' ? value.baseURL : '')
       setModels(toDraft(value.models))
       const credential = await api.credentials.describe({ refs: [KEY_REF] })
-      if (credential.result.ok) setKeyConfigured(credential.result.value.credentials[KEY_REF]?.configured)
+      if (credential.result.ok) {
+        const view = credential.result.value.credentials[KEY_REF]
+        setKeyConfigured(view?.configured)
+        setKeyLocked(view?.writable === false)
+      }
       setStatus('ready')
     } catch (error) {
       setErrorText(error instanceof Error ? error.message : String(error))
@@ -245,9 +251,15 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
 
       <div style={fieldStyle}>
         <label htmlFor="newapi-key">{t('keyInput')}</label>
+        {/* The official ProviderEditor credential pattern: a read-only
+            credential (launch environment) locks the input and the
+            placeholder states the fact; no separate hint paragraph. */}
         <input
           id="newapi-key" type="password" autoComplete="off" style={inputStyle}
-          placeholder={keyConfigured === true ? t('keyStored') : keyConfigured === false ? t('keyMissing') : t('keyPlaceholder')}
+          disabled={keyLocked}
+          placeholder={keyLocked
+            ? t('keyEnvLocked')
+            : keyConfigured === true ? t('keyStored') : keyConfigured === false ? t('keyMissing') : t('keyPlaceholder')}
           value={keyDraft}
           onChange={(event) => { setKeyDraft(event.target.value) }}
         />

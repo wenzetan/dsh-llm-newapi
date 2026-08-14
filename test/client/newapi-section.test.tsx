@@ -36,13 +36,13 @@ function wireFace(overrides: Partial<{
           },
         },
       })),
-      mutate: vi.fn(),
+      mutate: vi.fn(() => Promise.resolve({ result: { ok: true, value: { ns: 'llm-newapi', revision: 8 } } })),
     },
     credentials: {
       describe: vi.fn(() => Promise.resolve({
-        result: { ok: true, value: { credentials: { NEWAPI_API_KEY: { configured: true, writable: true } } } },
+        result: { ok: true, value: overrides.credentialsAnswer ?? { credentials: { NEWAPI_API_KEY: { configured: true, writable: true } } } },
       })),
-      set: vi.fn(),
+      set: vi.fn(() => Promise.resolve({ result: { ok: true, value: undefined } })),
     },
     llm: { discoverModels: vi.fn() },
   }
@@ -71,5 +71,35 @@ describe('NewApiSection mount', () => {
 
     await waitFor(() => { expect(screen.getByText(new RegExp('not registered'))).toBeTruthy() })
     expect(screen.getByText(t('retry'))).toBeTruthy()
+  })
+})
+
+describe('environment-supplied credential (read-only)', () => {
+  const envCredential = {
+    credentials: { NEWAPI_API_KEY: { configured: true, writable: false, source: 'env' } },
+  }
+
+  it('locks the key field with the launch-environment placeholder', async () => {
+    const api = wireFace({ credentialsAnswer: envCredential })
+    render(<NewApiSection api={api as never} t={t} />)
+
+    await waitFor(() => { expect(screen.getByLabelText(t('keyInput'))).toBeTruthy() })
+    // The official ProviderEditor pattern: writable === false disables the
+    // input and the placeholder states the fact (launch environment, read-only).
+    expect((screen.getByLabelText(t('keyInput')) as HTMLInputElement).disabled).toBe(true)
+    expect((screen.getByLabelText(t('keyInput')) as HTMLInputElement).placeholder).toBe(t('keyEnvLocked'))
+  })
+
+  it('saves the section without attempting a shadowed credential write', async () => {
+    const api = wireFace({ credentialsAnswer: envCredential })
+    render(<NewApiSection api={api as never} t={t} />)
+
+    await waitFor(() => { expect(screen.getByLabelText(t('baseUrl'))).toBeTruthy() })
+    fireEvent.change(screen.getByLabelText(t('baseUrl')), { target: { value: 'http://other:3000/v1' } })
+    fireEvent.click(screen.getByText(t('apply')))
+
+    await waitFor(() => { expect(api.settings.mutate).toHaveBeenCalledTimes(1) })
+    expect(api.credentials.set).not.toHaveBeenCalled()
+    await waitFor(() => { expect(screen.getByText(t('saved'))).toBeTruthy() })
   })
 })
