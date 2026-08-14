@@ -65,6 +65,97 @@ jobs:
           path: dsh-llm-newapi-*.tgz
           if-no-files-found: error
 
+  # Real-boot gate: install the packed tarball through the dsh CLI into a
+  # fresh DSH_HOME and require `dsh web` to boot serving the plugin. This is
+  # the check that would have caught both shipped breakages: v0.5.0 (a peer
+  # the host does not provide made the whole plugin tree fail to load) and
+  # v0.5.2 (the RPC channel silently never registered, so the browser met
+  # the SPA fallback's 405).
+  boot:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install dsh
+        run: npm install -g @deepseek-ai/dsh
+      - name: Install the packed tarball into a fresh web profile
+        run: |
+          set -euo pipefail
+          export DSH_HOME="$RUNNER_TEMP/dsh-home"
+          mkdir -p "$DSH_HOME"
+          TARBALL="$(pwd)/$(ls dsh-llm-newapi-*.tgz)"
+          dsh plugin --profile web add "$TARBALL"
+          PROFILE="$DSH_HOME/profiles/web/package.json"
+          if [ ! -f "$PROFILE" ]; then
+            echo "::error::dsh plugin add did not scaffold the web profile at $PROFILE"
+            find "$DSH_HOME" -maxdepth 3
+            exit 1
+          fi
+          # Register the bundle row (the documented install step 2), keeping
+          # whatever rows the scaffold already wrote.
+          node -e '
+            const fs = require("node:fs")
+            const path = process.env.DSH_HOME + "/profiles/web/package.json"
+            const pkg = JSON.parse(fs.readFileSync(path, "utf8"))
+            pkg.dsh ??= {}
+            pkg.dsh.profile ??= {}
+            pkg.dsh.profile.bundles ??= ["@deepseek-ai/dsh-base", "@deepseek-ai/dsh-web-app"]
+            for (const row of ["@deepseek-ai/dsh-base", "@deepseek-ai/dsh-web-app", "dsh-llm-newapi"]) {
+              if (!pkg.dsh.profile.bundles.includes(row)) pkg.dsh.profile.bundles.push(row)
+            }
+            fs.writeFileSync(path, JSON.stringify(pkg, null, 2) + "\n")
+            console.log("bundles:", pkg.dsh.profile.bundles.join(", "))
+          '
+      - name: dsh web boots and serves the plugin
+        run: |
+          set -euo pipefail
+          export DSH_HOME="$RUNNER_TEMP/dsh-home"
+          LOG="$RUNNER_TEMP/dsh-web.log"
+          dsh web > "$LOG" 2>&1 &
+          WEB_PID=$!
+          trap 'kill "$WEB_PID" 2>/dev/null || true' EXIT
+          code=""
+          for _ in $(seq 1 120); do
+            if ! kill -0 "$WEB_PID" 2>/dev/null; then
+              echo "::error::dsh web exited during startup"
+              cat "$LOG"
+              exit 1
+            fi
+            code="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3080/ || true)"
+            [ "$code" = "200" ] && break
+            sleep 1
+          done
+          if [ "$code" != "200" ]; then
+            echo "::error::dsh web did not become ready on :3080"
+            cat "$LOG"
+            exit 1
+          fi
+          echo "web ready on :3080"
+          # The plugin's browser half is served for the module loader.
+          client="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:3080/plugins/dsh-llm-newapi/client.js")"
+          if [ "$client" != "200" ]; then
+            echo "::error::client bundle not served (HTTP $client)"
+            cat "$LOG"
+            exit 1
+          fi
+          # The plugin's RPC channel exists: any answer but 405 proves the
+          # route registered (405 is the SPA fallback rejecting a POST).
+          rpc="$(curl -s -o /dev/null -w '%{http_code}' -X POST \
+            http://127.0.0.1:3080/llm-newapi/models-dev-params \
+            -H 'content-type: application/json' \
+            -d '{"type":"client-request","rpcId":"ci-boot","method":"models-dev-params","payload":{"modelIds":[]}}')"
+          if [ "$rpc" = "405" ]; then
+            echo "::error::RPC channel /llm-newapi missing (405) — the channel did not register"
+            cat "$LOG"
+            exit 1
+          fi
+          echo "boot gate passed: web ready, client bundle HTTP $client, RPC channel HTTP $rpc"
+
   release:
     needs: build
     if: startsWith(github.ref, 'refs/tags/v')
