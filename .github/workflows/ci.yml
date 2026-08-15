@@ -310,9 +310,20 @@ jobs:
           fi
           STABLE="v${RC#v}"; STABLE="${STABLE%%-*}"
           SHA="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RC}" --jq '.object.sha')"
+          # Annotated tags peel to a tag object, not the commit: dereference
+          # once so SHA is the commit the CI run list can match on.
+          if [ "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RC}" --jq '.object.type')" = "tag" ]; then
+            SHA="$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${SHA}" --jq '.object.sha')"
+          fi
+          # Annotated tags peel to a tag object, not the commit: dereference
+          # once so SHA is the commit the CI run list can match on.
+          if [ "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RC}" --jq '.object.type')" = "tag" ]; then
+            SHA="$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${SHA}" --jq '.object.sha')"
+          fi
           echo "promoting $RC ($SHA) -> $STABLE"
           # The rc's CI must have finished green on exactly this commit.
-          CONCLUSION="$(gh run list --repo "$GITHUB_REPOSITORY" --commit "$SHA" --workflow CI --limit 1 --json conclusion --jq '.[0].conclusion // "none"')"
+          # The rc push (not any workflow_dispatch, e.g. this very promote) must have finished green on exactly this commit.
+          CONCLUSION="$(gh run list --repo "$GITHUB_REPOSITORY" --commit "$SHA" --workflow CI --json conclusion,event,headBranch --jq 'map(select(.event=="push" and .headBranch=="${{ inputs.rc_tag }}")) | .[0].conclusion // "none"')"
           if [ "$CONCLUSION" != "success" ]; then
             echo "::error::CI for $RC is '$CONCLUSION' (need success) — fix or re-tag before promoting"
             exit 1
