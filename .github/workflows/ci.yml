@@ -8,8 +8,8 @@ on:
   workflow_dispatch:
     inputs:
       rc_tag:
-        description: 'Pre-release tag to promote (e.g. v0.8.2-rc.1) — creates the stable vX.Y.Z on the same commit after verifying its CI is green'
-        required: true
+        description: 'Promote a green pre-release tag to its stable twin on the same commit (e.g. v0.8.2-rc.5 -> v0.8.2). Leave empty to only run the gates.'
+        required: false
         type: string
 
 jobs:
@@ -292,15 +292,19 @@ jobs:
   # vX.Y.Z on the same commit. The pushed stable tag then flows through the
   # ordinary release job as a full release + npm latest.
   promote:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && inputs.rc_tag != ''
     runs-on: ubuntu-latest
     permissions:
-      actions: read
+      actions: write  # gh api actions/runs + gh workflow run (verify CI, dispatch release)
       contents: write
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Validate the requested tag and create the stable twin
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Validate the rc tag and create its stable twin
+        id: promote
         run: |
           set -euo pipefail
           RC="${{ inputs.rc_tag }}"
@@ -316,8 +320,8 @@ jobs:
             SHA="$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${SHA}" --jq '.object.sha')"
           fi
           echo "promoting $RC ($SHA) -> $STABLE"
-          # The rc's CI must have finished green on exactly this commit.
-          # The rc push (not any workflow_dispatch, e.g. this very promote) must have finished green on exactly this commit.
+          # The rc push (not any workflow_dispatch, e.g. this very promote)
+          # must have finished green on exactly this commit.
           CONCLUSION="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${SHA}&event=push&per_page=10" --jq '[.workflow_runs[] | select(.head_branch=="${{ inputs.rc_tag }}")][0].conclusion // "none"')"
           if [ "$CONCLUSION" != "success" ]; then
             echo "::error::CI for $RC is '$CONCLUSION' (need success) — fix or re-tag before promoting"
@@ -327,13 +331,14 @@ jobs:
             echo "::error::$STABLE already exists — bump the version instead"
             exit 1
           fi
-          # Annotated tag via the API (no working copy in this job), then the
-          # ref push triggers the ordinary stable release pipeline.
-          TAG_SHA="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/tags" \
-            -f tag="$STABLE" -f message="$STABLE (promoted from $RC)" \
-            -f object="$SHA" -f type=commit --jq '.sha')"
-          gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
-            -f ref="refs/tags/$STABLE" -f sha="$TAG_SHA" >/dev/null
+          # Local annotated tag on the confirmed commit, then push. A tag
+          # pushed with GITHUB_TOKEN does NOT trigger the tags:['v*']
+          # workflow (GitHub's recursion guard), so the release run is
+          # dispatched explicitly in the next step.
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$STABLE" -m "$STABLE (promoted from $RC)" "$SHA"
+          git push origin "$STABLE"
           echo "created $STABLE — stable release pipeline starting"
           # Keep the moving `latest` tag on the newest confirmed stable so
           # `github:wenzetan/dsh-llm-newapi#latest` stays a valid dynamic
@@ -346,3 +351,9 @@ jobs:
               -f ref="refs/tags/latest" -f sha="$SHA" >/dev/null
           fi
           echo "moved latest tag -> $STABLE ($SHA)"
+          echo "stable_tag=$STABLE" >> "$GITHUB_OUTPUT"
+      - name: Trigger the release run on the stable tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STABLE: ${{ steps.promote.outputs.stable_tag }}
+        run: gh workflow run ci.yml --ref "$STABLE"
