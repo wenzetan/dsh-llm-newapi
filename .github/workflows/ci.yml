@@ -260,16 +260,28 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       # npm assigns the `latest` dist-tag to the very first version published
       # even when publishing under --tag next (v0.8.2-rc.4 shipped that way).
-      # The stable release re-claims `latest`; until then keep it removed so a
-      # bare `dsh plugin --profile web add dsh-llm-newapi` cannot fetch an
-      # unconfirmed prerelease as if it were the stable channel.
-      - name: Prerelease must never own the latest dist-tag
+      # latest cannot be deleted (registry 403) — only re-assigned; the
+      # step below re-claims it to the newest stable already published,
+      # or warns when none exists yet (the next promote re-claims it).
+      - name: Prerelease must not own the latest dist-tag
         if: env.NPM_TOKEN != '' && steps.channel.outputs.npm_tag == 'next'
         run: |
+          # npm forbids DELETING the latest dist-tag (403) — it can only be
+          # re-assigned. npm assigns latest to the very first published
+          # version even under --tag next (v0.8.2-rc.4 shipped that way), so
+          # when this rc publish leaves latest pointing at a -suffixed
+          # version, re-claim it to the newest stable already on the
+          # registry if one exists. With no stable published yet, only warn:
+          # the next promote/stable release re-claims latest itself.
           LATEST="$(npm dist-tag ls dsh-llm-newapi | sed -n 's/^latest: //p')"
           if [ -n "$LATEST" ] && [[ "$LATEST" == *-* ]]; then
-            npm dist-tag rm dsh-llm-newapi latest
-            echo "removed stale latest=$LATEST (prerelease must not own latest)"
+            STABLE="$(npm dist-tag ls dsh-llm-newapi | sed -n 's/^[^:]*: //p' | grep -v -- '-' | sort -V | tail -1)"
+            if [ -n "$STABLE" ]; then
+              npm dist-tag add "dsh-llm-newapi@$STABLE" latest
+              echo "re-claimed latest: $LATEST -> $STABLE"
+            else
+              echo "::warning::latest=$LATEST points at a prerelease and no stable version exists yet — the next promote will re-claim latest"
+            fi
           else
             echo "latest untouched (${LATEST:-<unset>})"
           fi
