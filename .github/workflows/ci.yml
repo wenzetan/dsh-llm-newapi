@@ -83,11 +83,13 @@ jobs:
           cd /tmp/pc
           npm install --no-audit --no-fund
           npm run build
-          # Runtime peers of the built entry (defineTool comes from dsh-tools).
-          npm install --no-audit --no-fund --no-save \
+          # Runtime peers of the built entry (defineTool comes from
+          # dsh-tools). legacy-peer-deps: the checker only needs these to
+          # load; their own transitive peer pins conflict across rc versions.
+          npm install --no-audit --no-fund --no-save --legacy-peer-deps \
             @deepseek-ai/dsh-tools@0.0.1-rc.1 \
             @deepseek-ai/cordis@4.0.1 \
-            @deepseek-ai/dsh-invariants@0.0.1-rc.1
+            @deepseek-ai/dsh-invariants@0.0.1-rc.5
       - name: plugin_check verdict is pass
         run: |
           node --input-type=module -e "
