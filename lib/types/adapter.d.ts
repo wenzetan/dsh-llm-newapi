@@ -41,6 +41,11 @@ export interface NewApiCatalogModel {
     maxTokens?: number;
     /** Supported reasoning-effort ids; presence offers the effort selector. */
     reasoningEfforts?: string[];
+    /**
+     * Preset default effort for this model; must be one of
+     * {@link reasoningEfforts}. Absence defaults to the highest declared rung.
+     */
+    defaultReasoningEffort?: string;
 }
 /**
  * Validated connection facts for one operation. The plugin's

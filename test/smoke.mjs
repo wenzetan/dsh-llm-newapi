@@ -274,6 +274,22 @@ function stubModelsListing() {
   })
   const resolved = await resolveModelAdapter.resolveModel('newapi', 'qwen3-32b')
   assert.deepEqual(resolved.reasoning?.efforts.map(effort => effort.id), ['low', 'high'])
+  // No preset → the highest declared rung becomes the default.
+  assert.equal(resolved.reasoning?.defaultEffort, 'high')
+  const presetAdapter = new plugin.NewApiAdapter({
+    options: () => ({
+      baseURL: 'http://gw.local:3000/v1',
+      apiKeyRef: 'newapi',
+      models: [{ id: 'm1', reasoningEfforts: ['low', 'high'], defaultReasoningEffort: 'low' }],
+      modelExcludePatterns: [],
+      defaultContextWindow: 128_000,
+      streamIdleTimeoutMs: 300_000,
+      retryPolicy: resolveRetryPolicy(undefined, 'smoke'),
+    }),
+    resolveApiKey: async () => 'smoke-key',
+  })
+  // A preset inside the declared list wins over the highest rung.
+  assert.equal((await presetAdapter.resolveModel('newapi', 'm1')).reasoning?.defaultEffort, 'low')
   const wired = plugin.serializeRequest({ model: 'qwen3-32b', messages: [], system: undefined, tools: undefined, reasoningEffort: 'high' })
   assert.equal(wired.reasoning_effort, 'high')
   assert.equal('reasoning_effort' in plugin.serializeRequest({ model: 'qwen3-32b', messages: [] }), false)

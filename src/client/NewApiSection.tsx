@@ -141,6 +141,19 @@ function toDrafts(source: unknown): ModelDraft[] {
       : {})
 }
 
+/**
+ * The highest rung in a row's declared efforts — the dropdown's value when
+ * no preset has been chosen yet.
+ */
+const EFFORT_RUNG: Readonly<Record<string, number>> = {
+  max: 7, xhigh: 6, high: 5, medium: 4, low: 3, minimal: 2, none: 1, default: 0,
+}
+
+function highestOf(efforts: readonly unknown[]): string {
+  const ids = efforts.filter((effort): effort is string => typeof effort === 'string')
+  return [...ids].sort((a, b) => (EFFORT_RUNG[b] ?? -1) - (EFFORT_RUNG[a] ?? -1))[0] ?? ''
+}
+
 /** Buffer key for one capacity field; the row half moves when rows do. */
 function bufferKey(index: number, field: CapacityField): string {
   return `${String(index)}:${field}`
@@ -292,12 +305,17 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
           const efforts = Array.isArray(model.reasoningEfforts)
             ? model.reasoningEfforts.filter((effort): effort is string => typeof effort === 'string' && effort.length > 0)
             : []
+          const preset = typeof model.defaultReasoningEffort === 'string'
+            && efforts.includes(model.defaultReasoningEffort)
+            ? model.defaultReasoningEffort
+            : undefined
           return {
             id,
             ...name.length > 0 ? { name } : {},
             ...contextWindow !== undefined ? { contextWindow } : {},
             ...maxTokens !== undefined ? { maxTokens } : {},
             ...efforts.length > 0 ? { reasoningEfforts: efforts } : {},
+            ...preset !== undefined ? { defaultReasoningEffort: preset } : {},
           }
         }),
       })
@@ -678,13 +696,21 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
                     ? (
                       <label className="newapi-modelfield">
                         <span className="newapi-modelfield-label">{t('modelReasoning')}</span>
-                        {/* Read-only fact adopted from models.dev; editable in
-                            settings.yaml for deployments that know better. */}
-                        <input
-                          className="newapi-input" type="text" readOnly
-                          value={model.reasoningEfforts.filter((effort): effort is string => typeof effort === 'string').join(' / ')}
-                          aria-label={`${t('modelReasoning')} ${String(index + 1)}`}
-                        />
+                        <select
+                          className="newapi-select"
+                          aria-label={`${t('defaultEffort')} ${String(index + 1)}`}
+                          value={typeof model.defaultReasoningEffort === 'string'
+                            && model.reasoningEfforts.includes(model.defaultReasoningEffort)
+                            ? model.defaultReasoningEffort
+                            : highestOf(model.reasoningEfforts)}
+                          onChange={(event) => {
+                            patch(index, { defaultReasoningEffort: event.target.value })
+                          }}
+                        >
+                          {model.reasoningEfforts.map((effort) => (
+                            <option key={effort} value={effort}>{effort}</option>
+                          ))}
+                        </select>
                       </label>
                     )
                     : null}

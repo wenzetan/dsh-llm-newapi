@@ -79,6 +79,11 @@ export interface NewApiCatalogModel {
   maxTokens?: number
   /** Supported reasoning-effort ids; presence offers the effort selector. */
   reasoningEfforts?: string[]
+  /**
+   * Preset default effort for this model; must be one of
+   * {@link reasoningEfforts}. Absence defaults to the highest declared rung.
+   */
+  defaultReasoningEffort?: string
 }
 
 /**
@@ -297,6 +302,20 @@ function modelInfo(provider: string, model: NewApiCatalogModel): LlmModelInfo {
   }
 }
 
+/**
+ * Effort intensity ordering, strongest first; unknown ids rank lowest.
+ * @param effort - an effort id from the catalog.
+ * @returns the comparable rung.
+ */
+const EFFORT_RUNG: Readonly<Record<string, number>> = {
+  max: 7, xhigh: 6, high: 5, medium: 4, low: 3, minimal: 2, none: 1, default: 0,
+}
+
+/** The highest-ranked effort id in a catalog-declared list. */
+function highestEffort(efforts: readonly string[]): string {
+  return [...efforts].sort((a, b) => (EFFORT_RUNG[b] ?? -1) - (EFFORT_RUNG[a] ?? -1))[0] as string
+}
+
 /** Brand words that keep their own casing instead of first-letter capital. */
 const BRAND_SPELLING: Readonly<Record<string, string>> = {
   glm: 'GLM',
@@ -429,7 +448,10 @@ export class NewApiAdapter extends LlmAdapter {
       context: { contextWindow: configured?.contextWindow ?? connection.defaultContextWindow },
       // Reasoning efforts arrive as catalog facts (from models.dev via the
       // update action): a row that carries them offers the effort selector,
-      // and an explicit effort rides the wire as `reasoning_effort`. Rows
+      // and an explicit effort rides the wire as `reasoning_effort`. The
+      // default is the row's configured preset, falling back to the highest
+      // rung the catalog declared (max > xhigh > high > medium > low > …), so
+      // switching into reasoning mode selects a level automatically. Rows
       // without the fact keep declaring nothing — an explicit effort then
       // rejects before provider I/O, same as before.
       ...configured?.reasoningEfforts !== undefined && configured.reasoningEfforts.length > 0
@@ -439,6 +461,10 @@ export class NewApiAdapter extends LlmAdapter {
               id: ReasoningEffortId(effort),
               name: effort.charAt(0).toUpperCase() + effort.slice(1),
             })),
+            ...configured.defaultReasoningEffort !== undefined
+              && configured.reasoningEfforts.includes(configured.defaultReasoningEffort)
+              ? { defaultEffort: ReasoningEffortId(configured.defaultReasoningEffort) }
+              : { defaultEffort: ReasoningEffortId(highestEffort(configured.reasoningEfforts)) },
           },
         }
         : {},

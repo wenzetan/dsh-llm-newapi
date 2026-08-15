@@ -129,6 +129,7 @@ const catalogModel: z<NewApiCatalogModel> = z.object({
   contextWindow: z.number().step(1).min(1),
   maxTokens: z.number().step(1).min(1),
   reasoningEfforts: z.array(z.string()),
+  defaultReasoningEffort: z.string(),
 })
 
 /** Default forward proxy: the conventional Clash port on loopback. */
@@ -187,6 +188,12 @@ function resolveModels(models: readonly NewApiCatalogModel[] | undefined): NewAp
     for (const effort of model.reasoningEfforts ?? []) {
       if (effort.length === 0) throw new Error(`${PKG}: catalog model "${model.id}" has an empty reasoning effort`)
     }
+    if (model.defaultReasoningEffort !== undefined
+      && !(model.reasoningEfforts ?? []).includes(model.defaultReasoningEffort)) {
+      throw new Error(
+        `${PKG}: catalog model "${model.id}" default reasoning effort "${model.defaultReasoningEffort}" is not among its reasoning efforts`,
+      )
+    }
     return {
       id: model.id,
       ...model.name === undefined ? {} : { name: model.name },
@@ -194,6 +201,7 @@ function resolveModels(models: readonly NewApiCatalogModel[] | undefined): NewAp
       ...model.contextWindow === undefined ? {} : { contextWindow: model.contextWindow },
       ...model.maxTokens === undefined ? {} : { maxTokens: model.maxTokens },
       ...model.reasoningEfforts === undefined || model.reasoningEfforts.length === 0 ? {} : { reasoningEfforts: model.reasoningEfforts },
+      ...model.defaultReasoningEffort === undefined ? {} : { defaultReasoningEffort: model.defaultReasoningEffort },
     }
   })
 }
