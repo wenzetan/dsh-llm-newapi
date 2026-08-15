@@ -105,7 +105,9 @@ export function serializeMessages(messages: Message[]): WireMessage[] {
  * Build the full wire request. Always streaming (`stream: true`, usage
  * reporting on); optional fields are omitted rather than sent as null, so
  * upstream defaults apply — including `max_tokens`, which this adapter has
- * no default for (heterogeneous upstreams each own their cap).
+ * no default for (heterogeneous upstreams each own their cap). An explicit
+ * reasoning effort rides as OpenAI-compatible `reasoning_effort`; it only
+ * ever arrives for a row whose catalog declares supported efforts.
  * @param options - the harness request (model, history, system, tools, sampling).
  * @returns the chat-completions request body.
  */
@@ -133,6 +135,7 @@ export function serializeRequest(options: GenerateOptions): WireRequest {
     ...tools !== undefined && tools.length > 0 ? { tools } : {},
     ...options.temperature !== undefined ? { temperature: options.temperature } : {},
     ...options.maxTokens === undefined ? {} : { max_tokens: options.maxTokens },
+    ...options.reasoningEffort !== undefined ? { reasoning_effort: options.reasoningEffort } : {},
     ...options.stop !== undefined ? { stop: options.stop } : {},
   }
 }

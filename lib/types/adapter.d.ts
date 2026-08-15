@@ -39,6 +39,8 @@ export interface NewApiCatalogModel {
     contextWindow?: number;
     /** Per-request output cap for this model; omission falls back to the profile's {@link NewApiConnectionOptions.maxTokens}. */
     maxTokens?: number;
+    /** Supported reasoning-effort ids; presence offers the effort selector. */
+    reasoningEfforts?: string[];
 }
 /**
  * Validated connection facts for one operation. The plugin's
@@ -122,8 +124,11 @@ export declare function normalizeBaseUrl(raw: string): string;
  * Derive a human display name from a gateway model id when the listing
  * supplied none: take the last `/` segment (routed ids carry their vendor
  * as a path prefix), turn `-` into spaces, and capitalize each word's first
- * letter. A lone trailing letter reads as a size marker and goes uppercase
- * too — `qwen3-32b` → `Qwen3 32B`, `glm-4.5-air` → `Glm 4.5 Air`.
+ * letter — except brand words, which keep their own spelling (`glm` → GLM,
+ * `gpt` → GPT, `deepseek` → DeepSeek). A lone trailing letter reads as a
+ * size marker and goes uppercase too. A routed id appends its verbatim
+ * prefix in brackets: `deepseek-ai/deepseek-v4-flash` →
+ * `DeepSeek V4 Flash[deepseek-ai]`.
  * @param id - the full gateway model id.
  * @returns the generated display name.
  */

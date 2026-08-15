@@ -17,6 +17,7 @@ import type { RetryPolicyConfig } from '@deepseek-ai/dsh-llm';
 import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment';
 import type { NewApiCatalogModel, NewApiConnectionOptions } from './adapter.js';
 export { DEFAULT_CONTEXT_WINDOW, DEFAULT_MODEL_EXCLUDE_PATTERNS, DEFAULT_STREAM_IDLE_TIMEOUT_MS, matchModelsDev, modelNameFromId, NewApiAdapter, normalizeBaseUrl, PKG, } from './adapter.js';
+export { serializeRequest } from './serialize.js';
 export type { NewApiAdapterOptions, NewApiCatalogModel, NewApiConnectionOptions } from './adapter.js';
 export type * from './types.js';
 export declare const name = "llm-newapi";

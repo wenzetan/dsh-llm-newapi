@@ -15,6 +15,8 @@ export interface ModelsDevMatch {
   contextWindow?: number
   /** Per-request output cap (`limit.output`). */
   maxTokens?: number
+  /** Supported reasoning-effort ids (`reasoning_options` type `effort`). */
+  reasoningEfforts?: string[]
 }
 
 /** Request payload of the `models-dev-params` RPC endpoint. */

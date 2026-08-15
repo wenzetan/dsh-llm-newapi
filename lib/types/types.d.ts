@@ -169,6 +169,11 @@ export interface ModelsDevModel {
         context?: number;
         output?: number;
     };
+    /** How the model takes reasoning control; `effort` carries the levels. */
+    reasoning_options?: Array<{
+        type: string;
+        values?: Array<string | null>;
+    }>;
 }
 /** One models.dev provider match for a gateway model id. */
 export interface ModelsDevMatch {
@@ -180,6 +185,8 @@ export interface ModelsDevMatch {
     contextWindow?: number;
     /** Per-request output cap (`limit.output`). */
     maxTokens?: number;
+    /** Supported reasoning-effort ids (`reasoning_options` type `effort`). */
+    reasoningEfforts?: string[];
 }
 /** Request payload of the `models-dev-params` RPC endpoint. */
 export interface ModelsDevParamsRequest {

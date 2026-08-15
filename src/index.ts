@@ -42,6 +42,7 @@ export {
   normalizeBaseUrl,
   PKG,
 } from './adapter.ts'
+export { serializeRequest } from './serialize.ts'
 export type { NewApiAdapterOptions, NewApiCatalogModel, NewApiConnectionOptions } from './adapter.ts'
 export type * from './types.ts'
 
@@ -119,6 +120,7 @@ const catalogModel: z<NewApiCatalogModel> = z.object({
   description: z.string(),
   contextWindow: z.number().step(1).min(1),
   maxTokens: z.number().step(1).min(1),
+  reasoningEfforts: z.array(z.string()),
 })
 
 /** Default forward proxy: the conventional Clash port on loopback. */
@@ -170,12 +172,16 @@ function resolveModels(models: readonly NewApiCatalogModel[] | undefined): NewAp
     }
     if (seen.has(model.id)) throw new Error(`${PKG}: duplicate catalog model "${model.id}"`)
     seen.add(model.id)
+    for (const effort of model.reasoningEfforts ?? []) {
+      if (effort.length === 0) throw new Error(`${PKG}: catalog model "${model.id}" has an empty reasoning effort`)
+    }
     return {
       id: model.id,
       ...model.name === undefined ? {} : { name: model.name },
       ...model.description === undefined ? {} : { description: model.description },
       ...model.contextWindow === undefined ? {} : { contextWindow: model.contextWindow },
       ...model.maxTokens === undefined ? {} : { maxTokens: model.maxTokens },
+      ...model.reasoningEfforts === undefined || model.reasoningEfforts.length === 0 ? {} : { reasoningEfforts: model.reasoningEfforts },
     }
   })
 }

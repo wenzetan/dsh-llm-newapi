@@ -289,11 +289,15 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
           const name = textOf(model, 'name').trim()
           const contextWindow = numberOf(model, 'contextWindow')
           const maxTokens = numberOf(model, 'maxTokens')
+          const efforts = Array.isArray(model.reasoningEfforts)
+            ? model.reasoningEfforts.filter((effort): effort is string => typeof effort === 'string' && effort.length > 0)
+            : []
           return {
             id,
             ...name.length > 0 ? { name } : {},
             ...contextWindow !== undefined ? { contextWindow } : {},
             ...maxTokens !== undefined ? { maxTokens } : {},
+            ...efforts.length > 0 ? { reasoningEfforts: efforts } : {},
           }
         }),
       })
@@ -449,16 +453,20 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
       if (match === undefined) return model
       const nextContext = match.contextWindow
       const nextMax = match.maxTokens
+      const nextEfforts = match.reasoningEfforts
       const currentContext = numberOf(model, 'contextWindow')
       const currentMax = numberOf(model, 'maxTokens')
+      const hasEfforts = Array.isArray(model.reasoningEfforts)
       const takeContext = nextContext !== undefined && (overwrite || currentContext === undefined)
       const takeMax = nextMax !== undefined && (overwrite || currentMax === undefined)
-      if (!takeContext && !takeMax) return model
+      const takeEfforts = nextEfforts !== undefined && nextEfforts.length > 0 && (overwrite || !hasEfforts)
+      if (!takeContext && !takeMax && !takeEfforts) return model
       touched += 1
       return {
         ...model,
         ...takeContext && nextContext !== undefined ? { contextWindow: nextContext } : {},
         ...takeMax && nextMax !== undefined ? { maxTokens: nextMax } : {},
+        ...takeEfforts && nextEfforts !== undefined ? { reasoningEfforts: nextEfforts } : {},
       }
     })
     setModels(next)
@@ -654,6 +662,20 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
                       onChange={(event) => { editCapacity(index, 'maxTokens', event.target.value) }}
                     />
                   </label>
+                  {Array.isArray(model.reasoningEfforts) && model.reasoningEfforts.length > 0
+                    ? (
+                      <label className="newapi-modelfield">
+                        <span className="newapi-modelfield-label">{t('modelReasoning')}</span>
+                        {/* Read-only fact adopted from models.dev; editable in
+                            settings.yaml for deployments that know better. */}
+                        <input
+                          className="newapi-input" type="text" readOnly
+                          value={model.reasoningEfforts.filter((effort): effort is string => typeof effort === 'string').join(' / ')}
+                          aria-label={`${t('modelReasoning')} ${String(index + 1)}`}
+                        />
+                      </label>
+                    )
+                    : null}
                 </div>
               )
               : null}
@@ -720,7 +742,7 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
                 <div key={entry.id} className="newapi-params-row">
                   <span className="newapi-params-id">{entry.id}</span>
                   <span className="newapi-params-values">
-                    {`${match.provider} · ${t('contextWindow')} ${match.contextWindow ?? '—'} / ${t('maxTokens')} ${match.maxTokens ?? '—'}`}
+                    {`${match.provider} · ${t('contextWindow')} ${match.contextWindow ?? '—'} / ${t('maxTokens')} ${match.maxTokens ?? '—'}${match.reasoningEfforts !== undefined && match.reasoningEfforts.length > 0 ? ` · ${t('modelReasoning')}: ${match.reasoningEfforts.join('/')}` : ''}`}
                   </span>
                   <span />
                 </div>
@@ -741,7 +763,7 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
                 >
                   {entry.matches.map((candidate, at) => (
                     <option key={candidate.provider} value={String(at)}>
-                      {`${candidate.provider}: ${t('contextWindow')} ${candidate.contextWindow ?? '—'} / ${t('maxTokens')} ${candidate.maxTokens ?? '—'}`}
+                      {`${candidate.provider}: ${t('contextWindow')} ${candidate.contextWindow ?? '—'} / ${t('maxTokens')} ${candidate.maxTokens ?? '—'}${candidate.reasoningEfforts !== undefined && candidate.reasoningEfforts.length > 0 ? ` · ${t('modelReasoning')}: ${candidate.reasoningEfforts.join('/')}` : ''}`}
                     </option>
                   ))}
                 </select>

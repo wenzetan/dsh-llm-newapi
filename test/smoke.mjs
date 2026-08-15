@@ -199,29 +199,53 @@ function stubModelsListing() {
     globalThis.fetch = originalFetch
   }
   assert.deepEqual(discovered.map(m => m.id), ['deepseek-chat', 'qwen/qwen-max', 'zhipu/glm-5.3'])
-  assert.equal(discovered.find(m => m.id === 'zhipu/glm-5.3').name, 'Glm 5.3')
+  assert.equal(discovered.find(m => m.id === 'zhipu/glm-5.3').name, 'GLM 5.3[zhipu]')
   assert.equal(discovered.find(m => m.id === 'qwen/qwen-max').name, 'Qwen Max')
 
-  // Name generation from ids: last / segment, dashes to spaces, first
-  // letters capitalized, and a lone trailing letter reads as a size marker.
+  // Name generation from ids: last / segment with the verbatim prefix in
+  // brackets, dashes to spaces, first letters capitalized with brand
+  // spellings, and a lone trailing letter reads as a size marker.
   const { modelNameFromId } = plugin
-  assert.equal(modelNameFromId('deepseek-chat'), 'Deepseek Chat')
+  assert.equal(modelNameFromId('deepseek-chat'), 'DeepSeek Chat')
   assert.equal(modelNameFromId('qwen3-32b'), 'Qwen3 32B')
-  assert.equal(modelNameFromId('glm-4.5-air'), 'Glm 4.5 Air')
-  assert.equal(modelNameFromId('zhipu/glm-4-flash'), 'Glm 4 Flash')
+  assert.equal(modelNameFromId('glm-4.5-air'), 'GLM 4.5 Air')
+  assert.equal(modelNameFromId('zhipu/glm-4-flash'), 'GLM 4 Flash[zhipu]')
   assert.equal(modelNameFromId('llama-3.1-70b'), 'Llama 3.1 70B')
+  assert.equal(modelNameFromId('deepseek-ai/deepseek-v4-flash'), 'DeepSeek V4 Flash[deepseek-ai]')
+  assert.equal(modelNameFromId('openai/gpt-4o'), 'GPT 4o[openai]')
 
-  // matchModelsDev: verbatim and last-segment keys, several providers kept.
+  // matchModelsDev: verbatim and last-segment keys, several providers kept;
+  // effort-shaped reasoning_options surface as reasoningEfforts (nulls drop).
   const api = {
-    qwen: { models: { 'qwen-max': { limit: { context: 262144, output: 32768 } } } },
-    alibaba: { models: { 'qwen-max': { name: 'Qwen Max (DashScope)', limit: { context: 131072 } } } },
+    qwen: { models: { 'qwen-max': { limit: { context: 262144, output: 32768 }, reasoning_options: [{ type: 'effort', values: ['low', 'medium', 'high', null] }] } } },
+    alibaba: { models: { 'qwen-max': { name: 'Qwen Max (DashScope)', limit: { context: 131072 }, reasoning_options: [{ type: 'toggle' }] } } },
     empty: {},
   }
   assert.deepEqual(plugin.matchModelsDev(api, 'qwen/qwen-max'), [
-    { provider: 'qwen', contextWindow: 262144, maxTokens: 32768 },
+    { provider: 'qwen', contextWindow: 262144, maxTokens: 32768, reasoningEfforts: ['low', 'medium', 'high'] },
     { provider: 'alibaba', name: 'Qwen Max (DashScope)', contextWindow: 131072 },
   ])
   assert.deepEqual(plugin.matchModelsDev(api, 'unknown-model'), [])
+
+  // A catalog row with efforts offers the selector, and an explicit effort
+  // rides the wire as reasoning_effort.
+  const resolveModelAdapter = new plugin.NewApiAdapter({
+    options: () => ({
+      baseURL: 'http://gw.local:3000/v1',
+      apiKeyRef: 'newapi',
+      models: [{ id: 'qwen3-32b', reasoningEfforts: ['low', 'high'] }],
+      modelExcludePatterns: [],
+      defaultContextWindow: 128_000,
+      streamIdleTimeoutMs: 300_000,
+      retryPolicy: resolveRetryPolicy(undefined, 'smoke'),
+    }),
+    resolveApiKey: async () => 'smoke-key',
+  })
+  const resolved = await resolveModelAdapter.resolveModel('newapi', 'qwen3-32b')
+  assert.deepEqual(resolved.reasoning?.efforts.map(effort => effort.id), ['low', 'high'])
+  const wired = plugin.serializeRequest({ model: 'qwen3-32b', messages: [], system: undefined, tools: undefined, reasoningEffort: 'high' })
+  assert.equal(wired.reasoning_effort, 'high')
+  assert.equal('reasoning_effort' in plugin.serializeRequest({ model: 'qwen3-32b', messages: [] }), false)
 
   // The settings write point refuses an enabled proxy with a non-http(s) url.
   await ctx.plugin(MemorySettings, {})

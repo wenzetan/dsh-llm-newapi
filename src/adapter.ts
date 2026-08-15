@@ -20,6 +20,7 @@ import {
   LlmError,
   ProviderRequestId,
   QUOTA_EXCEEDED_CODE,
+  ReasoningEffortId,
 } from '@deepseek-ai/dsh-llm'
 import type {
   GenerateOptions,
@@ -75,6 +76,8 @@ export interface NewApiCatalogModel {
   contextWindow?: number
   /** Per-request output cap for this model; omission falls back to the profile's {@link NewApiConnectionOptions.maxTokens}. */
   maxTokens?: number
+  /** Supported reasoning-effort ids; presence offers the effort selector. */
+  reasoningEfforts?: string[]
 }
 
 /**
@@ -151,12 +154,18 @@ const MODELS_DEV_TIMEOUT_MS = 30_000
 function modelsDevMatch(provider: string, entry: ModelsDevModel): ModelsDevMatch | undefined {
   const contextWindow = entry.limit?.context
   const maxTokens = entry.limit?.output
+  // The effort-shaped reasoning option carries the supported levels; `null`
+  // entries mean "not settable" and drop out.
+  const reasoningEfforts = entry.reasoning_options
+    ?.filter(option => option?.type === 'effort')
+    .flatMap(option => (option.values ?? []).filter((value): value is string => typeof value === 'string' && value.length > 0))
   if (contextWindow === undefined && maxTokens === undefined) return undefined
   return {
     provider,
     ...entry.name !== undefined && entry.name.length > 0 ? { name: entry.name } : {},
     ...contextWindow !== undefined ? { contextWindow } : {},
     ...maxTokens !== undefined ? { maxTokens } : {},
+    ...reasoningEfforts !== undefined && reasoningEfforts.length > 0 ? { reasoningEfforts } : {},
   }
 }
 
@@ -217,31 +226,46 @@ function modelInfo(provider: string, model: NewApiCatalogModel): LlmModelInfo {
   }
 }
 
+/** Brand words that keep their own casing instead of first-letter capital. */
+const BRAND_SPELLING: Readonly<Record<string, string>> = {
+  glm: 'GLM',
+  gpt: 'GPT',
+  deepseek: 'DeepSeek',
+}
+
 /**
  * Derive a human display name from a gateway model id when the listing
  * supplied none: take the last `/` segment (routed ids carry their vendor
  * as a path prefix), turn `-` into spaces, and capitalize each word's first
- * letter. A lone trailing letter reads as a size marker and goes uppercase
- * too — `qwen3-32b` → `Qwen3 32B`, `glm-4.5-air` → `Glm 4.5 Air`.
+ * letter — except brand words, which keep their own spelling (`glm` → GLM,
+ * `gpt` → GPT, `deepseek` → DeepSeek). A lone trailing letter reads as a
+ * size marker and goes uppercase too. A routed id appends its verbatim
+ * prefix in brackets: `deepseek-ai/deepseek-v4-flash` →
+ * `DeepSeek V4 Flash[deepseek-ai]`.
  * @param id - the full gateway model id.
  * @returns the generated display name.
  */
 export function modelNameFromId(id: string): string {
-  const last = id.slice(id.lastIndexOf('/') + 1)
-  const words = last.split('-').filter(word => word.length > 0)
-  return words.map((word, at) => {
+  const slash = id.lastIndexOf('/')
+  const prefix = slash === -1 ? undefined : id.slice(0, slash)
+  const words = id.slice(slash + 1).split('-').filter(word => word.length > 0)
+  const spelled = words.map((word, at) => {
     // A lone-letter segment anywhere ("...-b") is a marker, not a word.
     if (word.length === 1) return word.toUpperCase()
-    let spelled = word.charAt(0).toUpperCase() + word.slice(1)
+    const brand = BRAND_SPELLING[word]
+    if (brand !== undefined) return brand
+    let result = word.charAt(0).toUpperCase() + word.slice(1)
     if (at === words.length - 1) {
-      // A single letter trailing digits/dots in the LAST word ("32b",
-      // "4.5b") is a size suffix: capitalize it even though the word starts
-      // with a digit and the first-letter rule above never reaches it.
-      spelled = spelled.replace(/([0-9.])([a-z])$/, (_match: string, head: string, tail: string) =>
+      // A size letter (b/k/m) trailing digits/dots in the LAST word ("32b",
+      // "4.5b") is a suffix: capitalize it even though the word starts with
+      // a digit and the first-letter rule above never reaches it. Version
+      // letters stay as-is — `gpt-4o` keeps its lowercase o.
+      result = result.replace(/([0-9.])([bkm])$/, (_match: string, head: string, tail: string) =>
         head + tail.toUpperCase())
     }
-    return spelled
+    return result
   }).join(' ')
+  return prefix === undefined ? spelled : `${spelled}[${prefix}]`
 }
 
 /**
@@ -332,9 +356,21 @@ export class NewApiAdapter extends LlmAdapter {
         ? { provider, id: model, name: model, inputModalities: ['text' as const] }
         : modelInfo(provider, configured),
       context: { contextWindow: configured?.contextWindow ?? connection.defaultContextWindow },
-      // No reasoning metadata: heterogeneous upstreams each own their
-      // reasoning controls, so no effort selector is offered and explicit
-      // efforts reject before provider I/O.
+      // Reasoning efforts arrive as catalog facts (from models.dev via the
+      // update action): a row that carries them offers the effort selector,
+      // and an explicit effort rides the wire as `reasoning_effort`. Rows
+      // without the fact keep declaring nothing — an explicit effort then
+      // rejects before provider I/O, same as before.
+      ...configured?.reasoningEfforts !== undefined && configured.reasoningEfforts.length > 0
+        ? {
+          reasoning: {
+            efforts: configured.reasoningEfforts.map(effort => ({
+              id: ReasoningEffortId(effort),
+              name: effort.charAt(0).toUpperCase() + effort.slice(1),
+            })),
+          },
+        }
+        : {},
       ...defaultMaxTokens === undefined ? {} : { defaultMaxTokens },
     })
   }

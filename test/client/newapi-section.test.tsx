@@ -54,7 +54,7 @@ function paramsFace() {
     ok: true as const,
     value: {
       models: [
-        { id: 'deepseek-chat', matches: [{ provider: 'deepseek', contextWindow: 128_000, maxTokens: 8_192 }] },
+        { id: 'deepseek-chat', matches: [{ provider: 'deepseek', contextWindow: 128_000, maxTokens: 8_192, reasoningEfforts: ['low', 'medium', 'high'] }] },
         { id: 'qwen/qwen-max', matches: [
           { provider: 'qwen', contextWindow: 262_144, maxTokens: 32_768 },
           { provider: 'alibaba', contextWindow: 131_072 },
@@ -168,7 +168,7 @@ describe('models.dev params update', () => {
     await waitFor(() => { expect(api.settings.mutate).toHaveBeenCalledTimes(1) })
     const models = api.settings.mutate.mock.calls[0][0].ops
       .find((op: { path: string[] }) => op.path[0] === 'models').value
-    expect(models[0]).toEqual({ id: 'deepseek-chat', contextWindow: 128_000, maxTokens: 8_192 })
+    expect(models[0]).toEqual({ id: 'deepseek-chat', contextWindow: 128_000, maxTokens: 8_192, reasoningEfforts: ['low', 'medium', 'high'] })
     expect(models[1]).toEqual({ id: 'qwen/qwen-max', contextWindow: 262_144, maxTokens: 32_768 })
     expect(models[2]).toEqual({ id: 'mystery-model' })
   })
@@ -188,7 +188,7 @@ describe('models.dev params update', () => {
     await waitFor(() => { expect(api.settings.mutate).toHaveBeenCalledTimes(1) })
     const models = api.settings.mutate.mock.calls[0][0].ops
       .find((op: { path: string[] }) => op.path[0] === 'models').value
-    expect(models[0]).toEqual({ id: 'deepseek-chat', contextWindow: 65_536, maxTokens: 8_192 })
+    expect(models[0]).toEqual({ id: 'deepseek-chat', contextWindow: 65_536, maxTokens: 8_192, reasoningEfforts: ['low', 'medium', 'high'] })
   })
 
   it('sends the proxy url only while the toggle is on, and persists the proxy section', async () => {
