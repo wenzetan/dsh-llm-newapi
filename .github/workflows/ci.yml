@@ -249,7 +249,13 @@ jobs:
           registry-url: https://registry.npmjs.org
       - name: npm publish
         if: env.NPM_TOKEN != ''
-        run: npm publish dsh-llm-newapi-*.tgz --access public --tag "${{ steps.channel.outputs.npm_tag }}"
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          if npm view "dsh-llm-newapi@$VER" version --silent >/dev/null 2>&1; then
+            echo "already published $VER — skipping (rerun-safe)"
+          else
+            npm publish dsh-llm-newapi-*.tgz --access public --tag "${{ steps.channel.outputs.npm_tag }}"
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       # npm assigns the `latest` dist-tag to the very first version published
@@ -260,7 +266,7 @@ jobs:
       - name: Prerelease must never own the latest dist-tag
         if: env.NPM_TOKEN != '' && steps.channel.outputs.npm_tag == 'next'
         run: |
-          LATEST="$(npm dist-tag ls dsh-llm-newapi --json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);console.log(j.latest||"")})')"
+          LATEST="$(npm dist-tag ls dsh-llm-newapi | sed -n 's/^latest: //p')"
           if [ -n "$LATEST" ] && [[ "$LATEST" == *-* ]]; then
             npm dist-tag rm dsh-llm-newapi latest
             echo "removed stale latest=$LATEST (prerelease must not own latest)"
