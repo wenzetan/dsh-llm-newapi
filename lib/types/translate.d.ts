@@ -8,7 +8,7 @@
  * @module dsh-llm-newapi/translate
  */
 import type { FinishReason, StreamChunk, TokenUsage } from '@deepseek-ai/dsh-llm';
-import type { WireUsage } from './types.ts';
+import type { WireUsage } from './types.js';
 /**
  * Map the wire finish_reason vocabulary to the harness FinishReason.
  * @param reason - the wire `finish_reason` string.

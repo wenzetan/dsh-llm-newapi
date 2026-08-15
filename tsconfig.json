@@ -9,6 +9,7 @@
     "declaration": true,
     "emitDeclarationOnly": true,
     "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
     "strict": true,
     "noImplicitAny": true,
     "noUncheckedIndexedAccess": true,

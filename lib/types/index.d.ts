@@ -15,10 +15,10 @@ import type { Context } from '@deepseek-ai/cordis';
 import z from '@deepseek-ai/schemastery';
 import type { RetryPolicyConfig } from '@deepseek-ai/dsh-llm';
 import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment';
-import type { NewApiCatalogModel, NewApiConnectionOptions } from './adapter.ts';
-export { DEFAULT_CONTEXT_WINDOW, DEFAULT_MODEL_EXCLUDE_PATTERNS, DEFAULT_STREAM_IDLE_TIMEOUT_MS, matchModelsDev, NewApiAdapter, normalizeBaseUrl, PKG, } from './adapter.ts';
-export type { NewApiAdapterOptions, NewApiCatalogModel, NewApiConnectionOptions } from './adapter.ts';
-export type * from './types.ts';
+import type { NewApiCatalogModel, NewApiConnectionOptions } from './adapter.js';
+export { DEFAULT_CONTEXT_WINDOW, DEFAULT_MODEL_EXCLUDE_PATTERNS, DEFAULT_STREAM_IDLE_TIMEOUT_MS, matchModelsDev, NewApiAdapter, normalizeBaseUrl, PKG, } from './adapter.js';
+export type { NewApiAdapterOptions, NewApiCatalogModel, NewApiConnectionOptions } from './adapter.js';
+export type * from './types.js';
 export declare const name = "llm-newapi";
 export declare const inject: string[];
 /** Placeholder gateway base used when neither config nor environment names one. */

@@ -11,7 +11,7 @@
  * @module dsh-llm-newapi/serialize
  */
 import type { GenerateOptions, Message } from '@deepseek-ai/dsh-llm';
-import type { WireMessage, WireRequest } from './types.ts';
+import type { WireMessage, WireRequest } from './types.js';
 /**
  * Serialize the conversation. `tool-result` blocks become standalone
  * `{role: 'tool'}` messages; the harness puts each tool result in its own

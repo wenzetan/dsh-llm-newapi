@@ -37,6 +37,7 @@
   },
   "scripts": {
     "build": "npm run build:host && npm run build:client",
+    "prepack": "npm run build",
     "build:host": "tsc -p tsconfig.json && node scripts/build-host.mjs",
     "build:client": "node scripts/build-client.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.client.json",

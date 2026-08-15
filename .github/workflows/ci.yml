@@ -65,6 +65,41 @@ jobs:
           path: dsh-llm-newapi-*.tgz
           if-no-files-found: error
 
+  # Compliance gate: run the dsh-plugin-check diagnostics (manifest
+  # protocol / patch format / build pitfalls) over this repository and
+  # require a pass verdict. The checker is cloned and built from its own
+  # repo; its exported checkRepo() is a read-only static scan, so this job
+  # only needs a checkout and the committed lib/ layout.
+  plugin-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Clone and build dsh-plugin-check
+        run: |
+          git clone --depth 1 https://github.com/omdsh-dev/dsh-plugin-check /tmp/pc
+          cd /tmp/pc
+          npm install --no-audit --no-fund
+          npm run build
+          # Runtime peers of the built entry (defineTool comes from dsh-tools).
+          npm install --no-audit --no-fund --no-save \
+            @deepseek-ai/dsh-tools@0.0.1-rc.1 \
+            @deepseek-ai/cordis@4.0.1 \
+            @deepseek-ai/dsh-invariants@0.0.1-rc.1
+      - name: plugin_check verdict is pass
+        run: |
+          node --input-type=module -e "
+            const m = await import('/tmp/pc/lib/index.js')
+            const report = await m.checkRepo(process.cwd(), false)
+            console.log(JSON.stringify(report, null, 2))
+            if (report.verdict !== 'pass') {
+              console.error('::error::dsh-plugin-check verdict: ' + report.verdict)
+              process.exit(1)
+            }
+          "
+
   # Real-boot gate: install the packed tarball through the dsh CLI into a
   # fresh DSH_HOME and require `dsh web` to boot serving the plugin. This is
   # the check that would have caught both shipped breakages: v0.5.0 (a peer
