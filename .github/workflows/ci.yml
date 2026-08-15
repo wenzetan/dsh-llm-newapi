@@ -331,12 +331,22 @@ jobs:
             echo "::error::$STABLE already exists — bump the version instead"
             exit 1
           fi
+          # The stable tag must point at a commit whose package.json carries
+          # the stable version: npm refuses to publish a tarball version
+          # that already exists (the rc version), so bump package.json to
+          # the stable version on top of the confirmed rc commit, commit it
+          # to main, and point the stable tag at that commit.
+          npm version "${STABLE#v}" --no-git-tag-version >/dev/null
+          git add package.json package-lock.json 2>/dev/null || git add package.json
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -m "$STABLE" >/dev/null
+          SHA="$(git rev-parse HEAD)"
+          git push origin main
+          echo "bumped to $STABLE on main ($SHA)"
           # Local annotated tag on the confirmed commit, then push. A tag
           # pushed with GITHUB_TOKEN does NOT trigger the tags:['v*']
           # workflow (GitHub's recursion guard), so the release run is
           # dispatched explicitly in the next step.
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag -a "$STABLE" -m "$STABLE (promoted from $RC)" "$SHA"
           git push origin "$STABLE"
           echo "created $STABLE — stable release pipeline starting"
