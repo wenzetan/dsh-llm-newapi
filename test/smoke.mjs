@@ -199,8 +199,17 @@ function stubModelsListing() {
     globalThis.fetch = originalFetch
   }
   assert.deepEqual(discovered.map(m => m.id), ['deepseek-chat', 'qwen/qwen-max', 'zhipu/glm-5.3'])
-  assert.equal(discovered.find(m => m.id === 'zhipu/glm-5.3').name, 'glm-5.3')
+  assert.equal(discovered.find(m => m.id === 'zhipu/glm-5.3').name, 'Glm 5.3')
   assert.equal(discovered.find(m => m.id === 'qwen/qwen-max').name, 'Qwen Max')
+
+  // Name generation from ids: last / segment, dashes to spaces, first
+  // letters capitalized, and a lone trailing letter reads as a size marker.
+  const { modelNameFromId } = plugin
+  assert.equal(modelNameFromId('deepseek-chat'), 'Deepseek Chat')
+  assert.equal(modelNameFromId('qwen3-32b'), 'Qwen3 32B')
+  assert.equal(modelNameFromId('glm-4.5-air'), 'Glm 4.5 Air')
+  assert.equal(modelNameFromId('zhipu/glm-4-flash'), 'Glm 4 Flash')
+  assert.equal(modelNameFromId('llama-3.1-70b'), 'Llama 3.1 70B')
 
   // matchModelsDev: verbatim and last-segment keys, several providers kept.
   const api = {

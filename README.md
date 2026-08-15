@@ -26,13 +26,13 @@ dsh plugin --profile web add "github:wenzetan/dsh-llm-newapi"
 # 3. 重启 dsh web
 ```
 
-更新：重跑第 1 步后重启即可。锁定版本改用 tag 引用：`github:wenzetan/dsh-llm-newapi#v0.6.1`。
+更新：重跑第 1 步后重启即可。锁定版本改用 tag 引用：`github:wenzetan/dsh-llm-newapi#v0.6.2`。
 
 **方式 B：Release tarball（免 GitHub 克隆）**
 
 ```sh
 dsh plugin --profile web add \
-  https://github.com/wenzetan/dsh-llm-newapi/releases/download/v0.6.1/dsh-llm-newapi-0.6.1.tgz
+  https://github.com/wenzetan/dsh-llm-newapi/releases/download/v0.6.2/dsh-llm-newapi-0.6.2.tgz
 # 同方式 A 的第 2、3 步
 ```
 
@@ -91,6 +91,8 @@ npm test                       # cordis 实挂载 smoke：注册面 + chat-only 
 改源码后须重跑 `npm run build` 并**提交 `lib/`**——`github:` 安装从提交的产物运行，CI 的「Committed artifacts are current」步骤会在产物过期时拒绝。
 
 ## 状态
+
+v0.6.2：获取模型自动生成显示名——网关 listing 未提供名称时按 ID 派生：多段式 id 只取最后一个 `/` 后内容，`-` 转空格，每个单词首字母大写，末尾单字母尺寸后缀转大写（`qwen3-32b`→Qwen3 32B、`glm-4.5-air`→Glm 4.5 Air、`llama-3.1-70b`→Llama 3.1 70B）；listing 自带名称仍优先。
 
 v0.6.1：代理控件简化——取消预置下拉框，只保留单一文本框，默认值与占位符均为 `http://127.0.0.1:7890`（清空保存时回退该默认）。
 

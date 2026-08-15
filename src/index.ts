@@ -37,6 +37,7 @@ export {
   DEFAULT_MODEL_EXCLUDE_PATTERNS,
   DEFAULT_STREAM_IDLE_TIMEOUT_MS,
   matchModelsDev,
+  modelNameFromId,
   NewApiAdapter,
   normalizeBaseUrl,
   PKG,

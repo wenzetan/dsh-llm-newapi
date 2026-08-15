@@ -119,13 +119,22 @@ export declare function matchModelsDev(api: ModelsDevApi, id: string): ModelsDev
  */
 export declare function normalizeBaseUrl(raw: string): string;
 /**
- * Display name for one gateway model id. Routed ids (`qwen/qwen-max`,
- * `openai/gpt-4o`) carry their vendor as a path prefix; the last segment is
- * what a person reads as the model name, while the full id stays the wire
- * value the gateway answers to.
+ * Derive a human display name from a gateway model id when the listing
+ * supplied none: take the last `/` segment (routed ids carry their vendor
+ * as a path prefix), turn `-` into spaces, and capitalize each word's first
+ * letter. A lone trailing letter reads as a size marker and goes uppercase
+ * too — `qwen3-32b` → `Qwen3 32B`, `glm-4.5-air` → `Glm 4.5 Air`.
+ * @param id - the full gateway model id.
+ * @returns the generated display name.
+ */
+export declare function modelNameFromId(id: string): string;
+/**
+ * Display name for one gateway model id: the name the gateway listing
+ * supplied when it has one, else {@link modelNameFromId} over the id. The
+ * full id always stays the wire value the gateway answers to.
  * @param id - the full gateway model id.
  * @param listed - the name the gateway listing itself supplied, if any.
- * @returns the listed name when present, else the id's last path segment.
+ * @returns the listed name when present, else the generated name.
  */
 export declare function displayModelName(id: string, listed?: string): string;
 /**

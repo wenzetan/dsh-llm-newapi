@@ -218,18 +218,43 @@ function modelInfo(provider: string, model: NewApiCatalogModel): LlmModelInfo {
 }
 
 /**
- * Display name for one gateway model id. Routed ids (`qwen/qwen-max`,
- * `openai/gpt-4o`) carry their vendor as a path prefix; the last segment is
- * what a person reads as the model name, while the full id stays the wire
- * value the gateway answers to.
+ * Derive a human display name from a gateway model id when the listing
+ * supplied none: take the last `/` segment (routed ids carry their vendor
+ * as a path prefix), turn `-` into spaces, and capitalize each word's first
+ * letter. A lone trailing letter reads as a size marker and goes uppercase
+ * too — `qwen3-32b` → `Qwen3 32B`, `glm-4.5-air` → `Glm 4.5 Air`.
+ * @param id - the full gateway model id.
+ * @returns the generated display name.
+ */
+export function modelNameFromId(id: string): string {
+  const last = id.slice(id.lastIndexOf('/') + 1)
+  const words = last.split('-').filter(word => word.length > 0)
+  return words.map((word, at) => {
+    // A lone-letter segment anywhere ("...-b") is a marker, not a word.
+    if (word.length === 1) return word.toUpperCase()
+    let spelled = word.charAt(0).toUpperCase() + word.slice(1)
+    if (at === words.length - 1) {
+      // A single letter trailing digits/dots in the LAST word ("32b",
+      // "4.5b") is a size suffix: capitalize it even though the word starts
+      // with a digit and the first-letter rule above never reaches it.
+      spelled = spelled.replace(/([0-9.])([a-z])$/, (_match: string, head: string, tail: string) =>
+        head + tail.toUpperCase())
+    }
+    return spelled
+  }).join(' ')
+}
+
+/**
+ * Display name for one gateway model id: the name the gateway listing
+ * supplied when it has one, else {@link modelNameFromId} over the id. The
+ * full id always stays the wire value the gateway answers to.
  * @param id - the full gateway model id.
  * @param listed - the name the gateway listing itself supplied, if any.
- * @returns the listed name when present, else the id's last path segment.
+ * @returns the listed name when present, else the generated name.
  */
 export function displayModelName(id: string, listed?: string): string {
   if (listed !== undefined && listed.length > 0) return listed
-  const slash = id.lastIndexOf('/')
-  return slash === -1 ? id : id.slice(slash + 1)
+  return modelNameFromId(id)
 }
 
 function providerRetryAfterMs(value: string | null): number | undefined {
