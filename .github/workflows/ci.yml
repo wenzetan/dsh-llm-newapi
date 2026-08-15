@@ -300,9 +300,6 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - name: Validate the rc tag and create its stable twin
         id: promote
         run: |
@@ -331,14 +328,16 @@ jobs:
             echo "::error::$STABLE already exists — bump the version instead"
             exit 1
           fi
-          # Local annotated tag on the confirmed commit, then push. A tag
-          # pushed with GITHUB_TOKEN does NOT trigger the tags:['v*']
-          # workflow (GitHub's recursion guard), so the release run is
-          # dispatched explicitly in the next step.
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "$STABLE" -m "$STABLE (promoted from $RC)" "$SHA"
-          git push origin "$STABLE"
+          # Create the annotated stable tag via the API. (A git push with
+          # GITHUB_TOKEN would be rejected: the push touches workflow files
+          # and the token cannot hold the workflows permission. The API is
+          # also fine because it does not trigger the tags:['v*'] workflow,
+          # and the release run is dispatched explicitly below.)
+          TAG_SHA="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/tags" \
+            -f tag="$STABLE" -f message="$STABLE (promoted from $RC)" \
+            -f object="$SHA" -f type=commit --jq '.sha')"
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+            -f ref="refs/tags/$STABLE" -f sha="$TAG_SHA" >/dev/null
           echo "created $STABLE — stable release pipeline starting"
           # Keep the moving `latest` tag on the newest confirmed stable so
           # `github:wenzetan/dsh-llm-newapi#latest` stays a valid dynamic
@@ -357,3 +356,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           STABLE: ${{ steps.promote.outputs.stable_tag }}
         run: gh workflow run ci.yml --ref "$STABLE"
+
