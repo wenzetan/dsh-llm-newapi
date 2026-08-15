@@ -146,10 +146,15 @@ describe('models.dev params update', () => {
     await waitFor(() => { expect(screen.getByText(t('updateParams'))).toBeTruthy() })
     fireEvent.click(screen.getByText(t('updateParams')))
     await waitFor(() => { expect(screen.getByText(t('paramsTitle'))).toBeTruthy() })
-    // The summary names both matched counts; the unmatched row says so.
-    expect(screen.getByText((_, element) =>
+    // Completion feedback: a status line names the matched/unmatched counts
+    // right away, instead of only the panel below a possibly long list.
+    expect(screen.getByRole('status').textContent).toBe(
+      t('paramsSummary').replace('{matched}', '2').replace('{unmatched}', '1'),
+    )
+    // The counts appear twice by design: the status line and the panel summary.
+    expect(screen.getAllByText((_, element) =>
       element?.textContent === t('paramsSummary').replace('{matched}', '2').replace('{unmatched}', '1'),
-    )).toBeTruthy()
+    )).toHaveLength(2)
     expect(screen.getByText(t('paramsUnmatched'))).toBeTruthy()
     // The ambiguous id offers a provider picker with both entries.
     const picker = screen.getByLabelText(`${t('paramsProvider')} qwen/qwen-max`) as HTMLSelectElement

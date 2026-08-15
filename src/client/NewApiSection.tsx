@@ -12,7 +12,7 @@
  * token capacities behind the row's own disclosure, K/M-suffixed capacity
  * entry, and per-field text buffers so a count is not rewritten mid-word.
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { DiscoveredModelView, IApiClient, SettingsNamespaceView, SettingsPathOpView } from '@deepseek-ai/dsh-client-connection/client'
 import type { NewApiKey } from './locale.ts'
@@ -187,6 +187,14 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
   /** Chosen match index per model id, for ids with several providers. */
   const [paramChoices, setParamChoices] = useState<ReadonlyMap<string, number>>(new Map())
   const [paramsBusy, setParamsBusy] = useState(false)
+  /** The result panel, scrolled into view when a lookup lands. */
+  const paramsRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    // Feedback that the lookup finished: the panel may render below the
+    // fold behind a long model list, so bring it to the user. The optional
+    // call keeps non-browser test environments safe.
+    paramsRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' })
+  }, [params])
 
   const load = async (): Promise<void> => {
     setStatus('loading')
@@ -397,6 +405,14 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
       }
       setParams(response.value)
       setParamChoices(new Map())
+      // Completion feedback next to the action, not only in the panel the
+      // user may have to hunt for: matched/unmatched counts as a status line.
+      const matched = response.value.models.filter(entry => entry.matches.length > 0).length
+      setNotice(
+        t('paramsSummary')
+          .replace('{matched}', String(matched))
+          .replace('{unmatched}', String(response.value.models.length - matched)),
+      )
     } catch (error) {
       setErrorText(error instanceof Error ? error.message : String(error))
     } finally {
@@ -684,7 +700,7 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
       )}
 
       {params === undefined ? null : (
-        <div className="newapi-params">
+        <div className="newapi-params" ref={paramsRef}>
           <strong>{t('paramsTitle')}</strong>
           <p className="newapi-params-summary">{
             t('paramsSummary')
