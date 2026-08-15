@@ -304,6 +304,64 @@ function stubModelsListing() {
   assert.match(failure.error.message, /enable the proxy/)
 }
 
+// ── Block H: official-vendor matches default first ──
+{
+  const ctx = new Context()
+  await ctx.plugin(LlmRuntime)
+  await ctx.plugin(FakeCredentials, { newapi: 'key-h' })
+  // A built-in-style route that officially serves qwen-max — exactly what
+  // the official index reads from ctx.llm.
+  const officialAdapter = new plugin.NewApiAdapter({
+    options: () => ({
+      baseURL: 'http://official.local/v1',
+      apiKeyRef: 'newapi',
+      models: [{ id: 'qwen-max' }],
+      modelExcludePatterns: [],
+      defaultContextWindow: 128_000,
+      streamIdleTimeoutMs: 300_000,
+      retryPolicy: resolveRetryPolicy(undefined, 'smoke'),
+    }),
+    resolveApiKey: async () => 'unused',
+  })
+  await ctx.plugin({ inject: ['llm'], apply: (c) => { c.llm.registerAdapter(['qwen'], officialAdapter) } })
+  await mountPlugin(ctx)
+
+  const channels = []
+  class FakeConnectionH extends Service {
+    constructor(child) { super(child, 'connection') }
+    get rpc() {
+      return {
+        handle: (channel, handler) => {
+          channels.push(handler)
+          return () => Promise.resolve()
+        },
+      }
+    }
+  }
+  await ctx.plugin(FakeConnectionH)
+
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    alibaba: { models: { 'qwen-max': { limit: { context: 131_072 } } } },
+    qwen: { models: { 'qwen-max': { limit: { context: 262_144, output: 32_768 } } } },
+  }), { status: 200, headers: { 'content-type': 'application/json' } })
+  let answer
+  try {
+    answer = await channels[0]('models-dev-params', { modelIds: ['qwen/qwen-max'] }, new AbortController().signal)
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+  assert.equal(answer.ok, true)
+  const [first, second] = answer.value.models[0].matches
+  // The official route's provider leads and carries the flag; catalog order
+  // (alibaba first here) only orders the rest.
+  assert.equal(first.provider, 'qwen')
+  assert.equal(first.official, true)
+  assert.equal(first.contextWindow, 262_144)
+  assert.equal(second.provider, 'alibaba')
+  assert.equal(second.official, undefined)
+}
+
 // ── Block F: a dead proxy names the proxy, not the direct route ──
 {
   const adapter = new plugin.NewApiAdapter({

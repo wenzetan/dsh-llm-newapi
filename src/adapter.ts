@@ -132,6 +132,13 @@ export interface NewApiAdapterOptions {
    * `MISSING_CREDENTIAL` when the credentials store holds no value.
    */
   resolveApiKey: (connection: NewApiConnectionOptions) => Promise<string>
+  /**
+   * Name the provider route that officially serves a model id, so a
+   * multi-provider catalog match can put the vendor's own facts first.
+   * Sourced from the routes registered on `ctx.llm` (the built-in
+   * catalogs); absent when no route claims the id.
+   */
+  officialProviderOf?: (modelId: string) => Promise<string | undefined>
 }
 
 /** Default maximum idle interval while an adapter stream read is outstanding. */
@@ -521,8 +528,37 @@ export class NewApiAdapter extends LlmAdapter {
       void dispatcher?.close().catch(() => {})
     }
     return {
-      models: request.modelIds.map(id => ({ id, matches: matchModelsDev(api, id) })),
+      models: await Promise.all(request.modelIds.map(async id => ({
+        id,
+        matches: await this.prioritizeOfficial(id, matchModelsDev(api, id)),
+      }))),
     }
+  }
+
+  /**
+   * Put the official vendor's match first (the panel's default choice is
+   * index 0) and mark it. Lookup keys are bare model ids — the built-in
+   * catalogs carry no vendor path prefix — so a routed gateway id is looked
+   * up by its last segment too.
+   * @param id - the gateway model id.
+   * @param matches - every catalog match, in catalog order.
+   * @returns matches with the official one first and flagged, when known.
+   */
+  private async prioritizeOfficial(
+    id: string,
+    matches: ModelsDevMatch[],
+  ): Promise<ModelsDevMatch[]> {
+    const hook = this.config.officialProviderOf
+    if (hook === undefined || matches.length < 2) return matches
+    const slash = id.lastIndexOf('/')
+    const official = await hook(id)
+      ?? (slash === -1 ? undefined : await hook(id.slice(slash + 1)))
+    if (official === undefined) return matches
+    const at = matches.findIndex(match => match.provider === official)
+    const hit = at === -1 ? undefined : matches[at]
+    if (hit === undefined) return matches
+    const rest = matches.filter((_match, index) => index !== at)
+    return [{ ...hit, official: true }, ...rest]
   }
 
   async * stream(options: GenerateOptions): AsyncIterable<StreamChunk> {

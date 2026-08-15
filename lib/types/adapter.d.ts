@@ -93,6 +93,13 @@ export interface NewApiAdapterOptions {
      * `MISSING_CREDENTIAL` when the credentials store holds no value.
      */
     resolveApiKey: (connection: NewApiConnectionOptions) => Promise<string>;
+    /**
+     * Name the provider route that officially serves a model id, so a
+     * multi-provider catalog match can put the vendor's own facts first.
+     * Sourced from the routes registered on `ctx.llm` (the built-in
+     * catalogs); absent when no route claims the id.
+     */
+    officialProviderOf?: (modelId: string) => Promise<string | undefined>;
 }
 /** Default maximum idle interval while an adapter stream read is outstanding. */
 export declare const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 300000;
@@ -185,6 +192,16 @@ export declare class NewApiAdapter extends LlmAdapter {
      *   the user resolves which provider's facts to adopt), possibly none.
      */
     fetchModelsDevParams(request: ModelsDevParamsRequest, signal: AbortSignal): Promise<ModelsDevParamsResponse>;
+    /**
+     * Put the official vendor's match first (the panel's default choice is
+     * index 0) and mark it. Lookup keys are bare model ids — the built-in
+     * catalogs carry no vendor path prefix — so a routed gateway id is looked
+     * up by its last segment too.
+     * @param id - the gateway model id.
+     * @param matches - every catalog match, in catalog order.
+     * @returns matches with the official one first and flagged, when known.
+     */
+    private prioritizeOfficial;
     stream(options: GenerateOptions): AsyncIterable<StreamChunk>;
     private request;
 }

@@ -187,6 +187,8 @@ export interface ModelsDevMatch {
     maxTokens?: number;
     /** Supported reasoning-effort ids (`reasoning_options` type `effort`). */
     reasoningEfforts?: string[];
+    /** True when this match's provider is the model's official vendor. */
+    official?: boolean;
 }
 /** Request payload of the `models-dev-params` RPC endpoint. */
 export interface ModelsDevParamsRequest {

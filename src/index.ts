@@ -296,7 +296,32 @@ export function apply(ctx: Context, config: Config): void {
     )
   }
 
-  const adapter = new NewApiAdapter({ options, resolveApiKey })
+  // Official-vendor index for the models.dev params panel: model id → the
+  // provider route that serves it officially, read from every OTHER route
+  // registered on ctx.llm (the built-in catalogs are the authority — e.g.
+  // deepseek-v4-flash under the deepseek route). Rebuilt when the set of
+  // routes changes; a route that fails to list models is no authority.
+  let indexCache: { routes: string; byModel: Map<string, string> } | undefined
+  const officialProviderOf = async (modelId: string): Promise<string | undefined> => {
+    const routes = ctx.llm.listProviders().map(provider => provider.id).sort().join(',')
+    if (indexCache === undefined || indexCache.routes !== routes) {
+      const byModel = new Map<string, string>()
+      for (const provider of ctx.llm.listProviders()) {
+        if (provider.id === PROVIDER) continue
+        try {
+          for (const model of await ctx.llm.listModels(provider.id)) {
+            byModel.set(model.id, provider.id)
+          }
+        } catch {
+          // An unlistable route contributes nothing; other routes still can.
+        }
+      }
+      indexCache = { routes, byModel }
+    }
+    return indexCache.byModel.get(modelId)
+  }
+
+  const adapter = new NewApiAdapter({ options, resolveApiKey, officialProviderOf })
   ctx.llm.registerConfigurableProviders([
     {
       provider: PROVIDER,
