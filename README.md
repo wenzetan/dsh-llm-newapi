@@ -11,13 +11,23 @@
 
 ## 安装（dsh ≥ 0.1.0-rc）
 
-构建产物（`lib/`）已提交入库——`github:` 简写从源码仓库安装（社区同款模式，如 dsh-at-file）；CI 校验产物与源码同步，`v*` tag 发布 `npm pack` tarball 到 Release（配置 `NPM_TOKEN` secret 时同时发 npm）。
+### 发布通道与版本选择
 
-**方式 A：GitHub 简写（推荐）**
+项目采用**双发布通道**，安装请始终引用**版本化 tag**，不要跟随 `main` 分支 HEAD：
+
+| 通道 | 版本形态 | 安装引用 | 适用场景 |
+|---|---|---|---|
+| **稳定版（推荐）** | `vX.Y.Z` | `github:wenzetan/dsh-llm-newapi#v0.8.1` 或 npm `dsh-llm-newapi`（latest） | 日常使用；已通过全部门禁并经人工确认晋升 |
+| **测试版** | `vX.Y.Z-rc.N` 等 | `github:wenzetan/dsh-llm-newapi#v0.8.2-rc.3` 或 npm `dsh-llm-newapi@next` | 尝鲜/验证新功能；未确认，仅发 GitHub Pre-release 与 npm `next` |
+| **main 分支 HEAD（不推荐）** | 无 tag | `github:wenzetan/dsh-llm-newapi` | 开发预览；未打 tag 的提交未走发布验证，可能是不稳定构建 |
+
+> ⚠️ 不带 `#tag` 的 `github:` 简写会安装 `main` 分支 HEAD——那不是发布通道。日常安装务必带 tag（稳定版用 `#vX.Y.Z`，测试版用 `#vX.Y.Z-rc.N`）。
+
+### 方式 A：GitHub 简写（版本化，推荐）
 
 ```sh
-# 1. 安装到 web profile（跟随 main 分支 HEAD）
-dsh plugin --profile web add "github:wenzetan/dsh-llm-newapi"
+# 1. 安装到 web profile（稳定版示例；测试版把 tag 换成 #vX.Y.Z-rc.N）
+dsh plugin --profile web add "github:wenzetan/dsh-llm-newapi#v0.8.1"
 
 # 2. 注册 bundle：编辑 $DSH_HOME/profiles/web/package.json
 #    （默认 ~/.dsh/profiles/web/package.json），
@@ -26,24 +36,25 @@ dsh plugin --profile web add "github:wenzetan/dsh-llm-newapi"
 # 3. 重启 dsh web
 ```
 
-更新：重跑第 1 步后重启即可。锁定版本改用 tag 引用：`github:wenzetan/dsh-llm-newapi#v0.8.1`。
+更新：重跑第 1 步（换新 tag）后重启即可。
 
-**方式 B：Release tarball（免 GitHub 克隆）**
+### 方式 B：Release tarball（免 GitHub 克隆）
 
 ```sh
 dsh plugin --profile web add \
   https://github.com/wenzetan/dsh-llm-newapi/releases/download/v0.8.1/dsh-llm-newapi-0.8.1.tgz
-# 同方式 A 的第 2、3 步
+# 同方式 A 的第 2、3 步；测试版用对应 -rc.N 的 Release 附件
 ```
 
-**方式 C：npm（Release 流水线配置 NPM_TOKEN 后可用）**
+### 方式 C：npm（Release 流水线配置 NPM_TOKEN 后可用）
 
 ```sh
-dsh plugin --profile web add dsh-llm-newapi
+dsh plugin --profile web add dsh-llm-newapi          # latest（稳定版）
+# dsh plugin --profile web add dsh-llm-newapi@next    # 测试版
 # 同方式 A 的第 2、3 步
 ```
 
-**方式 D：本地开发（link）**
+### 方式 D：本地开发（link）
 
 ```sh
 git clone https://github.com/wenzetan/dsh-llm-newapi && cd dsh-llm-newapi
