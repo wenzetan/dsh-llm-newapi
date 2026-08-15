@@ -337,6 +337,9 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
         return
       }
       const found = response.result.value.models
+      // Sorted by id regardless of what the host answered, so the picker and
+      // the rows it produces read the same way on every fetch.
+      found.sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
       if (found.length === 0) {
         setErrorText(t('fetchEmpty'))
         return
@@ -367,7 +370,16 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
         ...candidate.maxTokens === undefined ? {} : { maxTokens: candidate.maxTokens },
       })
     }
-    setModels([...existing.values()])
+    // The form keeps id order after an adoption: new and old rows merge
+    // into one alphabetized list instead of new rows appending at the end.
+    // Rows whose id is still empty are not yet models and stay at the bottom.
+    setModels([...existing.values()].sort((a, b) => {
+      const ai = textOf(a, 'id').trim()
+      const bi = textOf(b, 'id').trim()
+      if (ai.length === 0) return bi.length === 0 ? 0 : 1
+      if (bi.length === 0) return -1
+      return ai < bi ? -1 : ai > bi ? 1 : 0
+    }))
     setCandidates(undefined)
     setPicked(new Set())
   }

@@ -217,6 +217,33 @@ describe('models.dev params update', () => {
 })
 
 describe('model catalog', () => {
+  it('sorts fetched candidates by id and the adopted rows keep that order', async () => {
+    const api = wireFace()
+    api.llm.discoverModels.mockResolvedValueOnce({
+      result: {
+        ok: true,
+        value: { models: [{ id: 'zhipu/glm-5.3' }, { id: 'aa-first' }, { id: 'deepseek-chat' }] },
+      },
+    })
+    render(<NewApiSection api={api as never} t={t} fetchModelParams={paramsFace() as never} />)
+
+    await waitFor(() => { expect(screen.getByText(t('fetchModels'))).toBeTruthy() })
+    fireEvent.click(screen.getByText(t('fetchModels')))
+    await waitFor(() => { expect(screen.getByText(t('fetchAdopt'))).toBeTruthy() })
+    // The picker lists candidates in id order even though the reply did not.
+    const listed = screen.getAllByRole('listitem').map(item => item.textContent ?? '')
+    expect(listed[0]).toContain('aa-first')
+    expect(listed[1]).toContain('deepseek-chat')
+    expect(listed[2]).toContain('zhipu/glm-5.3')
+
+    fireEvent.click(screen.getByText(t('fetchAdopt')))
+    // The form keeps the sorted order: existing row and adopted rows merge
+    // alphabetically instead of appending the new ones at the end.
+    await waitFor(() => { expect((screen.getByLabelText(`${t('modelId')} 1`) as HTMLInputElement).value).toBe('aa-first') })
+    expect((screen.getByLabelText(`${t('modelId')} 2`) as HTMLInputElement).value).toBe('deepseek-chat')
+    expect((screen.getByLabelText(`${t('modelId')} 3`) as HTMLInputElement).value).toBe('zhipu/glm-5.3')
+  })
+
   /** The models op of the first mutate call. */
   function savedModels(api: ReturnType<typeof wireFace>): Array<Record<string, unknown>> {
     return api.settings.mutate.mock.calls[0][0].ops
