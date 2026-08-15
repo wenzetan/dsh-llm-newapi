@@ -120,7 +120,7 @@ Models 页编辑草稿时经 `ctx.llm.discoverModels('llm-newapi', { baseURL?, a
 源码实证（`packages/client/ui-settings-models/`、`packages/client/modules/`）的关键事实：
 
 1. **Models 页编辑卡的「获取模型」按钮只认官方两命名空间**：`ModelListEditor`（fetch 按钮）仅被 `ProviderEditor` 的 `deepseek`/`pi-ai` 家族布局渲染；`layoutOf()` 硬编码，自定义命名空间（`llm-newapi`）走 `unknown` 布局——只有一行提示，连 key 输入框都没有。
-2. **~~浏览器 bundle 构建期组装、外部插件无法注入~~（此断言已被推翻）**：`ClientModuleRegistry`（`packages/client/modules/src/index.ts`）在**运行时**扫描 loader 当前组合的全部插件行（`ctx.loader.entries()`），从配置树锚点（`ctx.baseUrl`）`require.resolve` 每个包的 package.json——带 `dsh.client` manifest 的插件，其 `lib/client.js` 被注册进 web bundle 图（`/plugins` 前缀路由 + `tapIndex` 注入 `window.__DSH_BOOT__`）。**外部插件的浏览器半可被动态发现，不需要重建 dsh web。**
+2. **~~浏览器 bundle 构建期组装、外部插件无法注入~~（此断言已被推翻）**：`ClientModuleRegistry`（`packages/client/modules/src/index.ts`）在**运行时**扫描 loader 当前组合的全部插件行（`ctx.loader.entries()`），从配置树锚点（`ctx.baseUrl`）`require.resolve` 每个包的 package.json——带 `dsh.client` manifest 的插件，其 `lib/client.js` 被注册进 web bundle 图（`/plugins` 前缀路由 + `tapIndex` 注入 `window.__DSH_BOOT__`）。**外部插件的浏览器侧可被动态发现，不需要重建 dsh web。**
 3. **`settings.section` 是 `kind: 'list'` 多贡献 slot**（`packages/client/ui-settings/src/client/contract/slots.ts`），注册选项 `id`/`order`/`label`；契约注释原文：*"A feature owns its own settings pages — adding a setting never means editing the shell"*——设置页为功能自有，加设置永远不改 shell。**外部插件可注册自己的设置页。**
 4. **client bundle 产物格式**：closure-factory——bundle 调 `window.__ModuleLoader__.load({id, factory})`，externals（`@deepseek-ai/dsh-client-*`、cordis）经注入的 require 从 loader 模块表解析；仓库内 `clientBundle` tsdown preset 未发布 npm，外部插件可用 esbuild 复刻该格式。
 5. **npm 依赖全部可得**：`@deepseek-ai/dsh-llm@0.0.1-rc.1`、`dsh-client-runtime@0.0.1-rc.1`、`dsh-client-ui-settings@…`、`cordis@4.0.1` 均已发布（peerDeps 已对齐）。
@@ -131,27 +131,27 @@ Models 页编辑草稿时经 `ctx.llm.discoverModels('llm-newapi', { baseURL?, a
 
 | 路线 | Web 获取按钮 | chat-only 过滤 | id/显示名 | 代价 |
 |---|---|---|---|---|
-| A. 仅 host 半（现状） | ❌（提示卡） | ✅（经 API 编程调用） | ✅ | 零修改；模型靠 settings.yaml 手填 |
+| A. 仅宿主侧（现状） | ❌（提示卡） | ✅（经 API 编程调用） | ✅ | 零修改；模型靠 settings.yaml 手填 |
 | B. pi-ai 预声明路由（yaml 播种，无代码） | ✅（pi-ai 布局） | ❌（发现不过滤，手动取消勾选） | ✅ | 一段 yaml；本插件无角色 |
 | C. dsh 核心补丁（`ui-settings-models` 加 `newapi` 布局） | ✅ | ✅ | ✅ | **已被否决**：独立插件不修改 dsh 本身 |
-| **D. 插件自带浏览器半（已选）** | ✅（自有设置页） | ✅ | ✅ | 零 dsh 修改；新增 client 半（组件 + slot 注册 + esbuild 产物） |
+| **D. 插件自带浏览器侧（已选）** | ✅（自有设置页） | ✅ | ✅ | 零 dsh 修改；新增浏览器侧代码（组件 + slot 注册 + esbuild 产物） |
 
 **决策记录**：C 曾短暂落地（三处类型/路由改动 + 双语 README，dsh 分支 `llm-newapi-web-layout`），用户裁定**独立插件不得修改 dsh 本身**后撤销——dsh checkout 已回干净 master，补丁文件已删除。正确归宿是把家族布局数据驱动的诉求**上游化**（向 dsh 提 issue/PR），而非自维护补丁。
 
-**已选路线 D（已落地）**：插件为双面包——
+**已选路线 D（已落地）**：插件为双侧结构——
 
 ```
 dsh-llm-newapi/
 ├── package.json          # "dsh": { "bundle": {patch}, "client": { platform:'web', inject:[…] } }
 │                         #   exports "./client" → lib/client.js（预构建随包分发）
 ├── src/
-│   ├── …（host 半：adapter/index/serialize/translate/sse/types）
-│   └── client/           # 浏览器半
+│   ├── …（宿主侧：adapter/index/serialize/translate/sse/types）
+│   └── client/           # 浏览器侧
 │       ├── index.ts      # export { apply, inject }
 │       ├── apply.ts      # locale.register + fiber 作用域 <style> 注入（--dsw-alias-* 令牌，亮暗自适应）
 │       │                  # + slots.inject('settings.section', register({id:'newapi',order:15}))
 │       ├── NewApiSection.tsx  # 纯 props 组件：key（credentials.set 只写，固定 ref 'newapi'）、baseURL、
-│       │                       # 模型四列 + 「获取模型」（llm.discoverModels，chat-only 过滤在 host 半）
+│       │                       # 模型四列 + 「获取模型」（llm.discoverModels，chat-only 过滤在宿主侧）
 │       │                       # + 候选勾选采纳；保存走 settings.mutate 路径级 ops；样式类 newapi-*
 │       └── locale.ts     # zh/en 文案（中文为主，dsh 惯例）
 ├── scripts/build-host.mjs     # esbuild ESM bundle（deps external）→ lib/index.js
