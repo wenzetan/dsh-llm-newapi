@@ -218,7 +218,7 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
       setWritable(described.result.value.writable)
       const section = described.result.value.namespaces.find((entry: SettingsNamespaceView) => entry.ns === NS)
       if (section === undefined) {
-        setErrorText(`${NS}: settings namespace is not registered (is the llm-newapi plugin row loaded?)`)
+        setErrorText(t('nsNotRegistered'))
         setStatus('error')
         return
       }
