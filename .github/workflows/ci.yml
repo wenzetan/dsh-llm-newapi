@@ -5,6 +5,12 @@ on:
     branches: [main]
     tags: ['v*']
   pull_request:
+  workflow_dispatch:
+    inputs:
+      rc_tag:
+        description: 'Pre-release tag to promote (e.g. v0.8.2-rc.1) — creates the stable vX.Y.Z on the same commit after verifying its CI is green'
+        required: true
+        type: string
 
 jobs:
   build:
@@ -198,23 +204,43 @@ jobs:
           fi
           echo "boot gate passed: web ready, client bundle HTTP $client, RPC channel HTTP $rpc"
 
+  # A tag like v0.8.2-rc.1 publishes as a TEST version everywhere: GitHub
+  # Release marked pre-release, npm under the `next` dist-tag. The stable
+  # `latest` / full release only ever comes from a suffix-free vX.Y.Z tag,
+  # and those tags are created exclusively by the promote job below (a
+  # manual confirmation step) — pushing one by hand is the process smell the
+  # promotion flow replaces.
   release:
-    needs: build
+    needs: [build, plugin-check, boot]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
       contents: write
     env:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+    outputs:
+      prerelease: ${{ steps.channel.outputs.prerelease }}
     steps:
       - uses: actions/download-artifact@v4
         with:
           name: dist
+      - name: Decide the release channel
+        id: channel
+        run: |
+          # Any hyphen in the tag (rc/beta/…) marks a test version.
+          if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+            echo "npm_tag=next" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+            echo "npm_tag=latest" >> "$GITHUB_OUTPUT"
+          fi
       - name: Create GitHub Release with the built tarball
         uses: softprops/action-gh-release@v2
         with:
           files: dsh-llm-newapi-*.tgz
           generate_release_notes: true
+          prerelease: ${{ steps.channel.outputs.prerelease }}
       - name: Publish to npm (optional, only when NPM_TOKEN is configured)
         if: env.NPM_TOKEN != ''
         uses: actions/setup-node@v4
@@ -223,6 +249,46 @@ jobs:
           registry-url: https://registry.npmjs.org
       - name: npm publish
         if: env.NPM_TOKEN != ''
-        run: npm publish dsh-llm-newapi-*.tgz --access public
+        run: npm publish dsh-llm-newapi-*.tgz --access public --tag "${{ steps.channel.outputs.npm_tag }}"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  # Manual confirmation: promote a green pre-release tag to its stable
+  # vX.Y.Z on the same commit. The pushed stable tag then flows through the
+  # ordinary release job as a full release + npm latest.
+  promote:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - name: Validate the requested tag and create the stable twin
+        run: |
+          set -euo pipefail
+          RC="${{ inputs.rc_tag }}"
+          if ! [[ "$RC" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-[0-9A-Za-z.]+$ ]]; then
+            echo "::error::$RC is not a pre-release tag (expected vX.Y.Z-rc.N or similar)"
+            exit 1
+          fi
+          STABLE="v${RC#v}"; STABLE="${STABLE%%-*}"
+          SHA="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RC}" --jq '.object.sha')"
+          echo "promoting $RC ($SHA) -> $STABLE"
+          # The rc's CI must have finished green on exactly this commit.
+          CONCLUSION="$(gh run list --repo "$GITHUB_REPOSITORY" --commit "$SHA" --workflow CI --limit 1 --json conclusion --jq '.[0].conclusion // "none"')"
+          if [ "$CONCLUSION" != "success" ]; then
+            echo "::error::CI for $RC is '$CONCLUSION' (need success) — fix or re-tag before promoting"
+            exit 1
+          fi
+          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${STABLE}" >/dev/null 2>&1; then
+            echo "::error::$STABLE already exists — bump the version instead"
+            exit 1
+          fi
+          # Annotated tag via the API (no working copy in this job), then the
+          # ref push triggers the ordinary stable release pipeline.
+          TAG_SHA="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/tags" \
+            -f tag="$STABLE" -f message="$STABLE (promoted from $RC)" \
+            -f object="$SHA" -f type=commit --jq '.sha')"
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+            -f ref="refs/tags/$STABLE" -f sha="$TAG_SHA" >/dev/null
+          echo "created $STABLE — stable release pipeline starting"

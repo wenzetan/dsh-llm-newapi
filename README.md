@@ -86,6 +86,12 @@ dsh plugin --profile web add link:$(pwd)
 
 **配置校验**：settings 写入点即拒绝适配器无法服务的段（如非 http(s) 的 baseURL、空过滤条目）——schema 表达不了的约束在写入时报错，不会「保存成功但静默沿用旧值」。
 
+## 发布流程（测试版 → 人工确认 → 正式版）
+
+- **测试版**：把 `package.json` 版本写为 `X.Y.Z-rc.N` 并推送 tag `vX.Y.Z-rc.N`。完整四门禁（build / plugin-check / boot / release）后：GitHub Release 标记 **Pre-release**，npm 发布到 **`next`** dist-tag（`latest` 不动）。安装：`dsh plugin --profile web add dsh-llm-newapi@next`。
+- **晋升正式**（人工确认）：Actions → CI → Run workflow → 填 `rc_tag`（如 `v0.8.2-rc.1`）。promote job 校验该 rc 的 CI 全绿、稳定 tag 未占用后，在同一 commit 上创建 `vX.Y.Z`——自动走正式发布（完整 Release + npm `latest`）。
+- 任何带 `-` 后缀的 tag 一律按测试版处理；稳定 tag 由 promote 独占创建，保证 `latest` 永远是人工确认过的版本。
+
 ## 构建与测试（本仓开发）
 
 ```sh
