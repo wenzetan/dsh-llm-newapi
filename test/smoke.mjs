@@ -8,7 +8,7 @@
  */
 import assert from 'node:assert/strict'
 import { Context, Service } from '@deepseek-ai/cordis'
-import LlmRuntime from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { resolveRetryPolicy } from '@deepseek-ai/dsh-llm'
 import SettingsProvider, { settingsNamespace } from '@deepseek-ai/dsh-settings'
 import * as plugin from '../lib/index.js'
 
@@ -270,4 +270,32 @@ function stubModelsListing() {
   assert.match(failure.error.message, /enable the proxy/)
 }
 
-console.log('smoke: llm-newapi registrations, chat-only discovery, credentials-service key, settings validation, ordering, display names, models.dev matching, and deferred RPC channel OK')
+// ── Block F: a dead proxy names the proxy, not the direct route ──
+{
+  const adapter = new plugin.NewApiAdapter({
+    options: () => ({
+      baseURL: 'http://gw.local:3000/v1',
+      apiKeyRef: 'newapi',
+      models: [],
+      modelExcludePatterns: [],
+      defaultContextWindow: 128_000,
+      streamIdleTimeoutMs: 300_000,
+      retryPolicy: resolveRetryPolicy(undefined, 'smoke'),
+    }),
+    resolveApiKey: async () => 'smoke-key',
+  })
+  // Loopback port 1 has no listener: the ProxyAgent connect is refused
+  // deterministically without any real network egress.
+  await assert.rejects(
+    adapter.fetchModelsDevParams(
+      { modelIds: ['deepseek-chat'], proxyUrl: 'http://127.0.0.1:1' },
+      new AbortController().signal,
+    ),
+    (error) => error.code === 'TRANSPORT'
+      && error.message.includes('models.dev catalog fetch failed')
+      && error.message.includes('the proxy at http://127.0.0.1:1 is unreachable')
+      && !error.message.includes('enable the proxy'),
+  )
+}
+
+console.log('smoke: llm-newapi registrations, chat-only discovery, credentials-service key, settings validation, ordering, display names, models.dev matching, deferred RPC channel, and dead-proxy diagnostics OK')

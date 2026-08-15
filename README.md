@@ -26,13 +26,13 @@ dsh plugin --profile web add "github:wenzetan/dsh-llm-newapi"
 # 3. 重启 dsh web
 ```
 
-更新：重跑第 1 步后重启即可。锁定版本改用 tag 引用：`github:wenzetan/dsh-llm-newapi#v0.5.7`。
+更新：重跑第 1 步后重启即可。锁定版本改用 tag 引用：`github:wenzetan/dsh-llm-newapi#v0.5.8`。
 
 **方式 B：Release tarball（免 GitHub 克隆）**
 
 ```sh
 dsh plugin --profile web add \
-  https://github.com/wenzetan/dsh-llm-newapi/releases/download/v0.5.7/dsh-llm-newapi-0.5.7.tgz
+  https://github.com/wenzetan/dsh-llm-newapi/releases/download/v0.5.8/dsh-llm-newapi-0.5.8.tgz
 # 同方式 A 的第 2、3 步
 ```
 
@@ -91,6 +91,8 @@ npm test                       # cordis 实挂载 smoke：注册面 + chat-only 
 改源码后须重跑 `npm run build` 并**提交 `lib/`**——`github:` 安装从提交的产物运行，CI 的「Committed artifacts are current」步骤会在产物过期时拒绝。
 
 ## 状态
+
+v0.5.8：操作文案改为「从models.dev获取模型信息」（en: Fetch model info from models.dev）；修复误导性失败提示——代理开启但代理本身连不上（ECONNREFUSED）时，旧消息错误地建议「启用代理」，现按实际路由区分：代理路径失败点名「proxy at <url> is unreachable; check that it is running, or change or disable the proxy setting」，直连路径失败才提示启用代理。
 
 v0.5.7：修复发布包类型入口——declaration emit 残留 `.ts` specifier（`rewriteRelativeImportExtensions` 不作用于 d.ts），消费者类型解析断裂；host 构建现把 `lib/types/*.d.ts` 相对 `.ts` 改写为 `.js`。补 `prepack` 脚本。CI 新增 dsh-plugin-check 合规门禁（清单协议 / patch 格式 / 构建陷阱，verdict 须 pass；本仓库实测从 fail 翻绿）。
 
