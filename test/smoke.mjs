@@ -215,17 +215,47 @@ function stubModelsListing() {
   assert.equal(modelNameFromId('deepseek-ai/deepseek-v4-flash'), 'DeepSeek V4 Flash[deepseek-ai]')
   assert.equal(modelNameFromId('openai/gpt-4o'), 'GPT 4o[openai]')
 
-  // matchModelsDev: verbatim and last-segment keys, several providers kept;
-  // effort-shaped reasoning_options surface as reasoningEfforts (nulls drop).
+  // matchModelsDev: exact keys first; built-in family hints flag the
+  // official vendor's entry (glm→zai over zhipuai, claude→anthropic,
+  // kimi→moonshotai, mimo→xiaomi), and a NEAR key inside the hinted vendor
+  // matches a version the catalog does not carry yet.
   const api = {
     qwen: { models: { 'qwen-max': { limit: { context: 262144, output: 32768 }, reasoning_options: [{ type: 'effort', values: ['low', 'medium', 'high', null] }] } } },
     alibaba: { models: { 'qwen-max': { name: 'Qwen Max (DashScope)', limit: { context: 131072 }, reasoning_options: [{ type: 'toggle' }] } } },
+    zai: { models: { 'glm-5': { limit: { context: 200000, output: 131072 } } } },
+    zhipuai: { models: { 'glm-5': { limit: { context: 200000, output: 131072 } } } },
+    anthropic: { models: { 'claude-sonnet-5': { limit: { context: 200000, output: 64000 } } } },
+    moonshotai: { models: { 'kimi-k3': { limit: { context: 256000, output: 65536 } } } },
+    xiaomi: { models: { 'mimo-v2.5-pro': { limit: { context: 131072, output: 32768 } } } },
+    digitalocean: { models: { 'mimo-v2.5-pro': { limit: { context: 131072, output: 32768 } } } },
     empty: {},
   }
-  assert.deepEqual(plugin.matchModelsDev(api, 'qwen/qwen-max'), [
-    { provider: 'qwen', contextWindow: 262144, maxTokens: 32768, reasoningEfforts: ['low', 'medium', 'high'] },
-    { provider: 'alibaba', name: 'Qwen Max (DashScope)', contextWindow: 131072 },
-  ])
+  // qwen-max: the built-in qwen→alibaba hint leads with the official
+  // vendor's entry; qwen's own catalog entry follows in exact-key order.
+  const qwenMatches = plugin.matchModelsDev(api, 'qwen/qwen-max')
+  assert.deepEqual(qwenMatches.map(m => m.provider), ['alibaba', 'qwen'])
+  assert.equal(qwenMatches[0].official, true)
+  assert.deepEqual(plugin.matchModelsDev(api, 'qwen-max')[1].reasoningEfforts, ['low', 'medium', 'high'])
+  // glm-5.3 (not carried): only the hinted vendor's NEAR key (zai glm-5)
+  // matches — near-matching stays inside the official vendor by design, so
+  // zhipuai's same-id glm-5 is not dragged in as noise.
+  const glm = plugin.matchModelsDev(api, 'glm-5.3')
+  assert.equal(glm.length, 1)
+  assert.equal(glm[0].provider, 'zai')
+  assert.equal(glm[0].official, true)
+  // claude-* → anthropic; kimi-* → moonshotai; mimo-* → xiaomi (flagged).
+  assert.equal(plugin.matchModelsDev(api, 'claude-sonnet-5')[0].provider, 'anthropic')
+  assert.equal(plugin.matchModelsDev(api, 'claude-sonnet-5')[0].official, true)
+  assert.equal(plugin.matchModelsDev(api, 'kimi-k3')[0].provider, 'moonshotai')
+  const mimo = plugin.matchModelsDev(api, 'mimo-v2.5-pro')
+  assert.equal(mimo[0].provider, 'xiaomi')
+  assert.equal(mimo[0].official, true)
+  assert.equal(mimo[1].provider, 'digitalocean')
+  // Deployment hints override: an exact-id hint reroutes to another vendor.
+  const rerouted = plugin.matchModelsDev(api, 'glm-5.3', { models: { 'glm-5.3': 'zhipuai' } })
+  assert.equal(rerouted.length, 1)
+  assert.equal(rerouted[0].provider, 'zhipuai')
+  assert.equal(rerouted[0].official, true)
   assert.deepEqual(plugin.matchModelsDev(api, 'unknown-model'), [])
 
   // A catalog row with efforts offers the selector, and an explicit effort
@@ -304,18 +334,19 @@ function stubModelsListing() {
   assert.match(failure.error.message, /enable the proxy/)
 }
 
-// ── Block H: official-vendor matches default first ──
+// ── Block H: registry-official matches lead when no hint applies ──
 {
   const ctx = new Context()
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(FakeCredentials, { newapi: 'key-h' })
-  // A built-in-style route that officially serves qwen-max — exactly what
-  // the official index reads from ctx.llm.
+  // A built-in-style route that officially serves gwmax-1 — a bare id under
+  // no built-in family prefix, so the registry channel (not the hint list)
+  // is what can flag it.
   const officialAdapter = new plugin.NewApiAdapter({
     options: () => ({
       baseURL: 'http://official.local/v1',
       apiKeyRef: 'newapi',
-      models: [{ id: 'qwen-max' }],
+      models: [{ id: 'gwmax-1' }],
       modelExcludePatterns: [],
       defaultContextWindow: 128_000,
       streamIdleTimeoutMs: 300_000,
@@ -323,7 +354,7 @@ function stubModelsListing() {
     }),
     resolveApiKey: async () => 'unused',
   })
-  await ctx.plugin({ inject: ['llm'], apply: (c) => { c.llm.registerAdapter(['qwen'], officialAdapter) } })
+  await ctx.plugin({ inject: ['llm'], apply: (c) => { c.llm.registerAdapter(['zeta'], officialAdapter) } })
   await mountPlugin(ctx)
 
   const channels = []
@@ -342,23 +373,23 @@ function stubModelsListing() {
 
   const originalFetch = globalThis.fetch
   globalThis.fetch = async () => new Response(JSON.stringify({
-    alibaba: { models: { 'qwen-max': { limit: { context: 131_072 } } } },
-    qwen: { models: { 'qwen-max': { limit: { context: 262_144, output: 32_768 } } } },
+    alpha: { models: { 'gwmax-1': { limit: { context: 131_072 } } } },
+    zeta: { models: { 'gwmax-1': { limit: { context: 262_144, output: 32_768 } } } },
   }), { status: 200, headers: { 'content-type': 'application/json' } })
   let answer
   try {
-    answer = await channels[0]('models-dev-params', { modelIds: ['qwen/qwen-max'] }, new AbortController().signal)
+    answer = await channels[0]('models-dev-params', { modelIds: ['gwmax-1'] }, new AbortController().signal)
   } finally {
     globalThis.fetch = originalFetch
   }
   assert.equal(answer.ok, true)
   const [first, second] = answer.value.models[0].matches
-  // The official route's provider leads and carries the flag; catalog order
-  // (alibaba first here) only orders the rest.
-  assert.equal(first.provider, 'qwen')
+  // The registry-official route's provider leads and carries the flag;
+  // catalog order (alpha first here) only orders the rest.
+  assert.equal(first.provider, 'zeta')
   assert.equal(first.official, true)
   assert.equal(first.contextWindow, 262_144)
-  assert.equal(second.provider, 'alibaba')
+  assert.equal(second.provider, 'alpha')
   assert.equal(second.official, undefined)
 }
 

@@ -170,6 +170,14 @@ export interface ModelsDevApi {
   }
 }
 
+/** Match-shaping hints for the models.dev params lookup. */
+export interface ProviderHints {
+  /** Family prefix → provider id, consulted before catalog order. */
+  defaults?: Record<string, string>
+  /** Exact gateway model id → provider id; wins over {@link defaults}. */
+  models?: Record<string, string>
+}
+
 /** One model entry in the models.dev catalog. */
 export interface ModelsDevModel {
   name?: string

@@ -26,13 +26,13 @@ dsh plugin --profile web add "github:wenzetan/dsh-llm-newapi"
 # 3. 重启 dsh web
 ```
 
-更新：重跑第 1 步后重启即可。锁定版本改用 tag 引用：`github:wenzetan/dsh-llm-newapi#v0.7.2`。
+更新：重跑第 1 步后重启即可。锁定版本改用 tag 引用：`github:wenzetan/dsh-llm-newapi#v0.8.0`。
 
 **方式 B：Release tarball（免 GitHub 克隆）**
 
 ```sh
 dsh plugin --profile web add \
-  https://github.com/wenzetan/dsh-llm-newapi/releases/download/v0.7.2/dsh-llm-newapi-0.7.2.tgz
+  https://github.com/wenzetan/dsh-llm-newapi/releases/download/v0.8.0/dsh-llm-newapi-0.8.0.tgz
 # 同方式 A 的第 2、3 步
 ```
 
@@ -71,6 +71,11 @@ dsh plugin --profile web add link:$(pwd)
     #   - rerank                       #   置 [] 关闭过滤；多能力 id（bge-m3）需自行补充
     # defaultContextWindow: 128000     # 目录未覆盖时的上下文容量
     # maxTokens: 8192                  # 缺省不发 max_tokens，用各上游默认
+    # providerHints:                   # models.dev 参数匹配的官方供应商仲裁
+    #   defaults:                      #   家族前缀 → provider（覆盖内建 glm→zai 等）
+    #     glm: zhipuai                 #   例：改用智谱开放平台的数据
+    #   models:                        #   逐 id 精确 → provider（优先于家族）
+    #     tencent/Hunyuan-MT-7B: nano-gpt
 ```
 
 **API 密钥**：不是配置项——固定存于 credentials store 的 `newapi` 引用下，唯一配置面是 web 设置页（写后立即生效，每请求解析）。插件不从任何环境变量读 key：credentials 服务的顶层只读层就是继承环境，`NEWAPI_API_KEY` 式引用会被环境里同名变量遮蔽并锁死前端输入框，故引用名固定为 `newapi`。无密钥时首个请求以 `MISSING_CREDENTIAL` 失败并指向设置页，不在装载时报错。
@@ -94,6 +99,8 @@ npm run cache:models-dev      # 本地缓存 models.dev/api.json 到 .cache/（g
 改源码后须重跑 `npm run build` 并**提交 `lib/`**——`github:` 安装从提交的产物运行，CI 的「Committed artifacts are current」步骤会在产物过期时拒绝。
 
 ## 状态
+
+v0.8.0：参数匹配引擎重构——**家族 hints 内建 + 近似键匹配 + 可配置覆盖**。内建家族默认（glm→zai、gpt→openai、claude→anthropic、deepseek→deepseek、gemini→google、grok→xai、qwen→alibaba、kimi→moonshotai、mimo→xiaomi、minimax→minimax、hunyuan→tencent）在候选中把官方条目置首并标「官方」；官方 vendor 内支持**近似键**（目录未收录该版本时取家族最接近条目，如 glm-5.3→zai 的 glm-5），跨 vendor 不近似以防噪声；`providerHints` 配置可覆盖/扩展（`defaults` 家族前缀 + `models` 逐 id 精确，逐 id 优先）。次序：hint 官方 → 精确键（目录序）→ registry 官方补充。实测 22 个模型 20 个官方直取（含真实思考等级），qwen27b-coder 无匹配（目录无此 id），tencent/Hunyuan-MT-7B 落 nano-gpt（官方 tencent 无此模型）。
 
 v0.7.2：模型目录标题行新增「清空」按钮——与逐行删除控件同语义，一次移除全部模型行；同步重置展开态、容量输入缓冲与参数结果面板，空目录时按钮禁用，保存即写入空 `models` 数组。
 

@@ -29,12 +29,13 @@ import {
   PKG,
 } from './adapter.ts'
 import type { NewApiCatalogModel, NewApiConnectionOptions } from './adapter.ts'
-import type { ModelsDevParamsRequest } from './types.ts'
+import type { ModelsDevParamsRequest, ProviderHints } from './types.ts'
 import type { HostConnectionHandle } from '@deepseek-ai/dsh-client-connection'
 
 export {
   DEFAULT_CONTEXT_WINDOW,
   DEFAULT_MODEL_EXCLUDE_PATTERNS,
+  DEFAULT_PROVIDER_HINTS,
   DEFAULT_STREAM_IDLE_TIMEOUT_MS,
   matchModelsDev,
   modelNameFromId,
@@ -102,6 +103,13 @@ export interface Config {
    * Gateway traffic is untouched.
    */
   proxy?: ProxyConfig
+  /**
+   * Match-shaping hints for the models.dev params lookup: family prefixes
+   * and exact ids name which catalog provider counts as official (leading
+   * match, flagged). Built-in families (glm→zai, gpt→openai, claude→
+   * anthropic, …) apply first; these entries override and extend them.
+   */
+  providerHints?: ProviderHints
   /** Provider-owned model-request retry policy; omission uses normal defaults. */
   retryPolicy?: RetryPolicyConfig
 }
@@ -139,6 +147,10 @@ export const Config: z<Config> = z.object({
   maxTokens: z.number().step(1).min(1).max(Number.MAX_SAFE_INTEGER),
   streamIdleTimeoutMs: z.number().min(Number.MIN_VALUE).max(MAX_TIMER_DELAY_MS).default(DEFAULT_STREAM_IDLE_TIMEOUT_MS),
   proxy: proxySchema.default({ enabled: false, url: DEFAULT_PROXY_URL }),
+  providerHints: z.object({
+    defaults: z.object({}),
+    models: z.object({}),
+  }),
   retryPolicy: RetryPolicySchema,
 })
 
@@ -247,6 +259,10 @@ export function resolveAdapterOptions(config: Config, environment?: ReturnType<t
     defaultContextWindow,
     streamIdleTimeoutMs,
     ...proxyEnabled ? { proxyUrl: proxyUrlRaw } : {},
+    providerHints: {
+      defaults: { ...config.providerHints?.defaults },
+      models: { ...config.providerHints?.models },
+    },
     retryPolicy: resolveRetryPolicy(config.retryPolicy, `${PKG}: retryPolicy`),
     ...config.maxTokens === undefined ? {} : { maxTokens: config.maxTokens },
   }

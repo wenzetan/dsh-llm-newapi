@@ -12,7 +12,7 @@
 import { LlmAdapter } from '@deepseek-ai/dsh-llm';
 import type { GenerateOptions, LlmDiscoveredModel, LlmModelDiscoveryRequest, LlmModelInfo, LlmProviderInfo, LlmResolvedModelInfo, ResolvedRetryPolicy, StreamChunk } from '@deepseek-ai/dsh-llm';
 import type { CredentialRef } from '@deepseek-ai/dsh-credentials';
-import type { ModelsDevApi, ModelsDevMatch, ModelsDevParamsRequest, ModelsDevParamsResponse, WireError } from './types.js';
+import type { ModelsDevApi, ModelsDevMatch, ModelsDevParamsRequest, ModelsDevParamsResponse, ProviderHints, WireError } from './types.js';
 /** Prefix for adapter-raised diagnostics. */
 export declare const PKG = "llm-newapi";
 /**
@@ -79,6 +79,8 @@ export interface NewApiConnectionOptions {
      * the proxy setting is enabled, so its absence means a direct fetch.
      */
     proxyUrl?: string;
+    /** Match-shaping hints for the models.dev params lookup. */
+    providerHints: ProviderHints;
     /** Provider-owned model-request retry policy, already resolved. */
     retryPolicy: ResolvedRetryPolicy;
 }
@@ -108,16 +110,26 @@ export declare const DEFAULT_CONTEXT_WINDOW = 128000;
 /** The public, provider-agnostic model catalog this feature reads. */
 export declare const MODELS_DEV_API_URL = "https://models.dev/api.json";
 /**
- * Find every catalog entry one gateway model id can mean. A gateway id is
- * matched verbatim first; a routed id (`qwen/qwen-max`) is additionally
- * matched by its last path segment, because catalog keys carry no vendor
- * prefix. Multiple providers can serve the same key — that ambiguity is
- * exactly what the caller asks the user to resolve.
+ * Built-in family-prefix hints: which catalog provider a model family's
+ * official facts live under. GLM deliberately maps to `zai` (Z.ai, the
+ * international official) rather than `zhipuai` — both carry identical ids.
+ * Deployments override or extend via the `providerHints` config.
+ */
+export declare const DEFAULT_PROVIDER_HINTS: Readonly<ProviderHints>;
+/**
+ * Find every catalog entry one gateway model id can mean, official first.
+ * Matching keys are the id and, for routed ids (`z-ai/glm-4.7`), its last
+ * path segment — catalog keys carry no vendor prefix. Within the hinted
+ * provider a NEAR key (catalog key contains the id or vice versa) also
+ * matches, so a catalog not yet carrying the exact version still yields
+ * the family's facts. Order: hinted provider's match first (flagged), then
+ * exact-key matches in catalog order, then the rest.
  * @param api - the parsed models.dev catalog.
  * @param id - a gateway model id.
- * @returns every match, deduplicated by provider, in catalog order.
+ * @param hints - deployment hints; `undefined` uses only the built-ins.
+ * @returns matches, deduplicated by provider, hinted one leading.
  */
-export declare function matchModelsDev(api: ModelsDevApi, id: string): ModelsDevMatch[];
+export declare function matchModelsDev(api: ModelsDevApi, id: string, hints?: ProviderHints): ModelsDevMatch[];
 /**
  * Normalize a user-supplied gateway base: trim, drop trailing slashes, and
  * require an absolute http(s) URL. Failing here — at the explicit resolve
@@ -193,13 +205,14 @@ export declare class NewApiAdapter extends LlmAdapter {
      */
     fetchModelsDevParams(request: ModelsDevParamsRequest, signal: AbortSignal): Promise<ModelsDevParamsResponse>;
     /**
-     * Put the official vendor's match first (the panel's default choice is
-     * index 0) and mark it. Lookup keys are bare model ids — the built-in
-     * catalogs carry no vendor path prefix — so a routed gateway id is looked
-     * up by its last segment too.
+     * Registry-based official priority, complementing the hint-driven one
+     * inside {@link matchModelsDev}: when the hints did NOT flag a match
+     * official yet, a route registered on ctx.llm that officially serves the
+     * id (bare, or the last segment of a routed id) still leads. Runs only
+     * when nothing is flagged, so the two mechanisms never fight.
      * @param id - the gateway model id.
-     * @param matches - every catalog match, in catalog order.
-     * @returns matches with the official one first and flagged, when known.
+     * @param matches - every catalog match, hinted order already applied.
+     * @returns matches with the registry-official one first, flagged.
      */
     private prioritizeOfficial;
     stream(options: GenerateOptions): AsyncIterable<StreamChunk>;

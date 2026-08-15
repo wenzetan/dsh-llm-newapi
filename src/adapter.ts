@@ -44,6 +44,7 @@ import type {
   ModelsDevModel,
   ModelsDevParamsRequest,
   ModelsDevParamsResponse,
+  ProviderHints,
   WireError,
   WireModelList,
 } from './types.ts'
@@ -117,6 +118,8 @@ export interface NewApiConnectionOptions {
    * the proxy setting is enabled, so its absence means a direct fetch.
    */
   proxyUrl?: string
+  /** Match-shaping hints for the models.dev params lookup. */
+  providerHints: ProviderHints
   /** Provider-owned model-request retry policy, already resolved. */
   retryPolicy: ResolvedRetryPolicy
 }
@@ -177,21 +180,62 @@ function modelsDevMatch(provider: string, entry: ModelsDevModel): ModelsDevMatch
 }
 
 /**
- * Find every catalog entry one gateway model id can mean. A gateway id is
- * matched verbatim first; a routed id (`qwen/qwen-max`) is additionally
- * matched by its last path segment, because catalog keys carry no vendor
- * prefix. Multiple providers can serve the same key — that ambiguity is
- * exactly what the caller asks the user to resolve.
+ * Built-in family-prefix hints: which catalog provider a model family's
+ * official facts live under. GLM deliberately maps to `zai` (Z.ai, the
+ * international official) rather than `zhipuai` — both carry identical ids.
+ * Deployments override or extend via the `providerHints` config.
+ */
+export const DEFAULT_PROVIDER_HINTS: Readonly<ProviderHints> = {
+  defaults: {
+    glm: 'zai',
+    gpt: 'openai',
+    o: 'openai',
+    claude: 'anthropic',
+    deepseek: 'deepseek',
+    gemini: 'google',
+    grok: 'xai',
+    hunyuan: 'tencent',
+    qwen: 'alibaba',
+    kimi: 'moonshotai',
+    // xiaomi is the vendor key mimo models live under (mimo-v2* family);
+    // no separate xiaomimimo provider exists in the catalog.
+    mimo: 'xiaomi',
+    minimax: 'minimax',
+  },
+}
+
+/** The provider a hint names for one gateway id, if any. */
+function hintedProvider(id: string, bare: string, hints?: ProviderHints): string | undefined {
+  const exact = hints?.models?.[id] ?? hints?.models?.[bare]
+  if (exact !== undefined) return exact
+  const lower = bare.toLowerCase()
+  const entries = Object.entries({ ...DEFAULT_PROVIDER_HINTS.defaults, ...hints?.defaults })
+  // Longest prefix wins so `gpt` does not shadow a hypothetical `gpt-x`
+  // family declared later.
+  const hit = entries.filter(([prefix]) => lower.startsWith(prefix.toLowerCase()))
+    .sort((a, b) => b[0].length - a[0].length)[0]
+  return hit?.[1]
+}
+
+/**
+ * Find every catalog entry one gateway model id can mean, official first.
+ * Matching keys are the id and, for routed ids (`z-ai/glm-4.7`), its last
+ * path segment — catalog keys carry no vendor prefix. Within the hinted
+ * provider a NEAR key (catalog key contains the id or vice versa) also
+ * matches, so a catalog not yet carrying the exact version still yields
+ * the family's facts. Order: hinted provider's match first (flagged), then
+ * exact-key matches in catalog order, then the rest.
  * @param api - the parsed models.dev catalog.
  * @param id - a gateway model id.
- * @returns every match, deduplicated by provider, in catalog order.
+ * @param hints - deployment hints; `undefined` uses only the built-ins.
+ * @returns matches, deduplicated by provider, hinted one leading.
  */
-export function matchModelsDev(api: ModelsDevApi, id: string): ModelsDevMatch[] {
-  const keys = new Set<string>([id])
-  const slash = id.lastIndexOf('/')
-  if (slash !== -1 && slash < id.length - 1) keys.add(id.slice(slash + 1))
-  const matches: ModelsDevMatch[] = []
-  const seen = new Set<string>()
+export function matchModelsDev(api: ModelsDevApi, id: string, hints?: ProviderHints): ModelsDevMatch[] {
+  const bare = id.slice(id.lastIndexOf('/') + 1)
+  const keys = new Set<string>([id, bare])
+  const hinted = hintedProvider(id, bare, hints)
+  const exact = new Map<string, ModelsDevMatch>()
+  const near = new Map<string, ModelsDevMatch>()
   for (const [provider, catalog] of Object.entries(api)) {
     const models = catalog?.models
     if (models === undefined || typeof models !== 'object') continue
@@ -199,12 +243,32 @@ export function matchModelsDev(api: ModelsDevApi, id: string): ModelsDevMatch[] 
       const entry = models[key]
       if (entry === undefined || typeof entry !== 'object') continue
       const match = modelsDevMatch(provider, entry)
-      if (match === undefined || seen.has(provider)) continue
-      seen.add(provider)
-      matches.push(match)
+      if (match !== undefined) exact.set(provider, match)
+    }
+    if (provider === hinted && !exact.has(provider)) {
+      // Near match inside the official vendor only: keys like
+      // `deepseek-v4-flash-0731` or a family base id for a newer version.
+      const hit = Object.keys(models)
+        .filter(key => key.includes(bare) || bare.includes(key))
+        .map(key => ({ key, entry: models[key] }))
+        .sort((a, b) => a.key.length - b.key.length)[0]
+      const entry = hit?.entry
+      const match = entry === undefined ? undefined : modelsDevMatch(provider, entry)
+      if (match !== undefined) near.set(provider, match)
     }
   }
-  return matches
+  const ordered: ModelsDevMatch[] = []
+  const seen = new Set<string>()
+  const push = (match: ModelsDevMatch, official: boolean): void => {
+    if (seen.has(match.provider)) return
+    seen.add(match.provider)
+    ordered.push(official ? { ...match, official: true } : match)
+  }
+  const hintedMatch = exact.get(hinted ?? '') ?? near.get(hinted ?? '')
+  if (hinted !== undefined && hintedMatch !== undefined) push(hintedMatch, true)
+  for (const match of exact.values()) push(match, false)
+  for (const match of near.values()) push(match, false)
+  return ordered
 }
 
 /**
@@ -527,29 +591,31 @@ export class NewApiAdapter extends LlmAdapter {
     } finally {
       void dispatcher?.close().catch(() => {})
     }
+    const hints = this.config.options().providerHints
     return {
       models: await Promise.all(request.modelIds.map(async id => ({
         id,
-        matches: await this.prioritizeOfficial(id, matchModelsDev(api, id)),
+        matches: await this.prioritizeOfficial(id, matchModelsDev(api, id, hints)),
       }))),
     }
   }
 
   /**
-   * Put the official vendor's match first (the panel's default choice is
-   * index 0) and mark it. Lookup keys are bare model ids — the built-in
-   * catalogs carry no vendor path prefix — so a routed gateway id is looked
-   * up by its last segment too.
+   * Registry-based official priority, complementing the hint-driven one
+   * inside {@link matchModelsDev}: when the hints did NOT flag a match
+   * official yet, a route registered on ctx.llm that officially serves the
+   * id (bare, or the last segment of a routed id) still leads. Runs only
+   * when nothing is flagged, so the two mechanisms never fight.
    * @param id - the gateway model id.
-   * @param matches - every catalog match, in catalog order.
-   * @returns matches with the official one first and flagged, when known.
+   * @param matches - every catalog match, hinted order already applied.
+   * @returns matches with the registry-official one first, flagged.
    */
   private async prioritizeOfficial(
     id: string,
     matches: ModelsDevMatch[],
   ): Promise<ModelsDevMatch[]> {
     const hook = this.config.officialProviderOf
-    if (hook === undefined || matches.length < 2) return matches
+    if (hook === undefined || matches.length < 2 || matches.some(match => match.official === true)) return matches
     const slash = id.lastIndexOf('/')
     const official = await hook(id)
       ?? (slash === -1 ? undefined : await hook(id.slice(slash + 1)))
