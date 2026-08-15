@@ -252,6 +252,23 @@ jobs:
         run: npm publish dsh-llm-newapi-*.tgz --access public --tag "${{ steps.channel.outputs.npm_tag }}"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      # npm assigns the `latest` dist-tag to the very first version published
+      # even when publishing under --tag next (v0.8.2-rc.4 shipped that way).
+      # The stable release re-claims `latest`; until then keep it removed so a
+      # bare `dsh plugin --profile web add dsh-llm-newapi` cannot fetch an
+      # unconfirmed prerelease as if it were the stable channel.
+      - name: Prerelease must never own the latest dist-tag
+        if: env.NPM_TOKEN != '' && steps.channel.outputs.npm_tag == 'next'
+        run: |
+          LATEST="$(npm dist-tag ls dsh-llm-newapi --json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);console.log(j.latest||"")})')"
+          if [ -n "$LATEST" ] && [[ "$LATEST" == *-* ]]; then
+            npm dist-tag rm dsh-llm-newapi latest
+            echo "removed stale latest=$LATEST (prerelease must not own latest)"
+          else
+            echo "latest untouched (${LATEST:-<unset>})"
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   # Manual confirmation: promote a green pre-release tag to its stable
   # vX.Y.Z on the same commit. The pushed stable tag then flows through the
@@ -292,3 +309,14 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
             -f ref="refs/tags/$STABLE" -f sha="$TAG_SHA" >/dev/null
           echo "created $STABLE — stable release pipeline starting"
+          # Keep the moving `latest` tag on the newest confirmed stable so
+          # `github:wenzetan/dsh-llm-newapi#latest` stays a valid dynamic
+          # install reference (same semantics as npm's latest dist-tag).
+          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/latest" >/dev/null 2>&1; then
+            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/git/refs/tags/latest" \
+              -f sha="$SHA" -f force=true >/dev/null
+          else
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+              -f ref="refs/tags/latest" -f sha="$SHA" >/dev/null
+          fi
+          echo "moved latest tag -> $STABLE ($SHA)"

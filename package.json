@@ -20,7 +20,8 @@
     "scripts/build-client.mjs",
     "cordis.patch.yml",
     "DESIGN.md",
-    "README.md"
+    "README.md",
+    "README.zh-CN.md"
   ],
   "dsh": {
     "bundle": {
