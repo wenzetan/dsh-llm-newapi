@@ -53,7 +53,7 @@ export const zh = {
   loadFailed: '加载失败',
   retry: '重试',
   readOnly: '当前设置源只读，无法保存。',
-  modelHint: '发现结果按命名过滤非 chat 模型；可在 settings.yaml 的 llm-newapi: 段用 modelExcludePatterns 调整。',
+  modelHint: '默认只列出 /chat/completions 接口支持的模型；不支持该接口的模型请手动添加。该配置可在 settings.yaml 的 llm-newapi: 段用 modelExcludePatterns 调整。',
 } as const
 
 export type NewApiKey = keyof typeof zh
@@ -108,5 +108,5 @@ export const en: Record<NewApiKey, string> = {
   loadFailed: 'Load failed',
   retry: 'Retry',
   readOnly: 'The active settings source is read-only; nothing can be saved.',
-  modelHint: 'Discovery filters non-chat models by naming convention; tune modelExcludePatterns in the llm-newapi: settings section.',
+  modelHint: 'By default only models supported by the /chat/completions endpoint are listed; models without that support must be added manually. Tune modelExcludePatterns in the llm-newapi: settings section.',
 }
