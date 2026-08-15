@@ -297,6 +297,8 @@ jobs:
     permissions:
       actions: read
       contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - name: Validate the requested tag and create the stable twin
         run: |
