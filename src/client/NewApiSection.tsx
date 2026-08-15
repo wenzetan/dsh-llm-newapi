@@ -585,6 +585,18 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
             <button type="button" className="newapi-linkbutton" disabled={paramsBusy} onClick={() => { void updateParams() }}>
               {paramsBusy ? t('paramsFetching') : t('updateParams')}
             </button>
+            {/* Same state semantics as the per-row delete glyph, applied to
+                every row at once: the merged position-keyed stores reset too,
+                so no stale disclosure or buffer survives into new rows. */}
+            <button type="button" className="newapi-linkbutton" disabled={busy || models.length === 0} onClick={() => {
+              setModels([])
+              setExpanded(new Set())
+              setEditing(new Map())
+              setParams(undefined)
+              setParamChoices(new Map())
+            }}>
+              {t('clearModels')}
+            </button>
           </div>
         </div>
         <div className="newapi-proxyrow">

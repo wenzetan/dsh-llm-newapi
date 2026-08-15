@@ -26,13 +26,13 @@ dsh plugin --profile web add "github:wenzetan/dsh-llm-newapi"
 # 3. 重启 dsh web
 ```
 
-更新：重跑第 1 步后重启即可。锁定版本改用 tag 引用：`github:wenzetan/dsh-llm-newapi#v0.7.1`。
+更新：重跑第 1 步后重启即可。锁定版本改用 tag 引用：`github:wenzetan/dsh-llm-newapi#v0.7.2`。
 
 **方式 B：Release tarball（免 GitHub 克隆）**
 
 ```sh
 dsh plugin --profile web add \
-  https://github.com/wenzetan/dsh-llm-newapi/releases/download/v0.7.1/dsh-llm-newapi-0.7.1.tgz
+  https://github.com/wenzetan/dsh-llm-newapi/releases/download/v0.7.2/dsh-llm-newapi-0.7.2.tgz
 # 同方式 A 的第 2、3 步
 ```
 
@@ -94,6 +94,8 @@ npm run cache:models-dev      # 本地缓存 models.dev/api.json 到 .cache/（g
 改源码后须重跑 `npm run build` 并**提交 `lib/`**——`github:` 安装从提交的产物运行，CI 的「Committed artifacts are current」步骤会在产物过期时拒绝。
 
 ## 状态
+
+v0.7.2：模型目录标题行新增「清空」按钮——与逐行删除控件同语义，一次移除全部模型行；同步重置展开态、容量输入缓冲与参数结果面板，空目录时按钮禁用，保存即写入空 `models` 数组。
 
 v0.7.1：参数匹配默认选官方——多供应商命中时，官方厂商的条目置首并标「官方」（面板默认选第 0 项，即官方参数）；权威来源为 dsh-llm 注册表里其他路由的内置模型目录（如 deepseek 路由声明 deepseek-v4-flash，则 api.json 取 deepseek 供应商条目），按裸模型 id 匹配（多段式 id 查末段），路由集合变化时索引自动重建。
 

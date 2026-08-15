@@ -280,6 +280,28 @@ describe('model catalog', () => {
     expect(savedModels(api)[0].name).toBeUndefined()
   })
 
+  it('clears every row through the clear action and saves an empty catalog', async () => {
+    const api = wireFace()
+    render(<NewApiSection api={api as never} t={t} fetchModelParams={paramsFace() as never} />)
+
+    // The fixture carries one model row; clear removes it and the empty
+    // hint appears in its place.
+    await waitFor(() => { expect(screen.getByText(t('clearModels'))).toBeTruthy() })
+    fireEvent.click(screen.getByText(t('clearModels')))
+    await waitFor(() => { expect(screen.getByText(t('modelsEmpty'))).toBeTruthy() })
+    expect(screen.queryByLabelText(`${t('modelId')} 1`)).toBeNull()
+    // An empty catalog disables the action until a row exists again.
+    expect((screen.getByText(t('clearModels')) as HTMLButtonElement).disabled).toBe(true)
+
+    // Saving writes the emptied array (the static describe stub still
+    // answers the old fixture after reload — irrelevant to the written ops).
+    fireEvent.click(screen.getByText(t('apply')))
+    await waitFor(() => { expect(api.settings.mutate).toHaveBeenCalledTimes(1) })
+    const models = api.settings.mutate.mock.calls[0][0].ops
+      .find((op: { path: string[] }) => op.path[0] === 'models').value
+    expect(models).toEqual([])
+  })
+
   it('adds a row through the add-model action and refuses a save with an empty id', async () => {
     const api = wireFace()
     render(<NewApiSection api={api as never} t={t} />)
