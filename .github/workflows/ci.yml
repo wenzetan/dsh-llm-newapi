@@ -80,16 +80,20 @@ jobs:
       - name: Clone and build dsh-plugin-check
         run: |
           git clone --depth 1 https://github.com/omdsh-dev/dsh-plugin-check /tmp/pc
+          npm install -g @deepseek-ai/dsh >/dev/null
           cd /tmp/pc
-          # One install for devDependencies AND the built entry's runtime
-          # peers (defineTool comes from dsh-tools): a second --no-save
-          # install would reconcile the tree and remove the first set.
-          # legacy-peer-deps: the checker only needs these to load; their own
-          # transitive peer pins conflict across rc versions.
-          npm install --no-audit --no-fund --legacy-peer-deps \
-            @deepseek-ai/dsh-tools@0.0.1-rc.1 \
-            @deepseek-ai/cordis@4.0.1 \
-            @deepseek-ai/dsh-invariants@0.0.1-rc.5
+          npm install --no-audit --no-fund --ignore-scripts
+          # The built entry imports @deepseek-ai/dsh-tools at runtime
+          # (defineTool). Installing those rc peers alongside the checker's
+          # own tree crashes both npm and pnpm (peer pins conflict across rc
+          # lines), so borrow them as symlinks from the global dsh install:
+          # ESM resolves the real path, and the checker's transitive needs
+          # resolve from dsh's own complete tree.
+          DSHNM="$(npm root -g)/@deepseek-ai/dsh/node_modules"
+          mkdir -p node_modules/@deepseek-ai
+          for pkg in dsh-tools dsh-invariants cordis; do
+            ln -s "$DSHNM/@deepseek-ai/$pkg" "node_modules/@deepseek-ai/$pkg"
+          done
           npm run build
       - name: plugin_check verdict is pass
         run: |
