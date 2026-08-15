@@ -368,7 +368,7 @@ jobs:
           # install reference (same semantics as npm's latest dist-tag).
           if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/latest" >/dev/null 2>&1; then
             gh api --method PATCH "repos/${GITHUB_REPOSITORY}/git/refs/tags/latest" \
-              -f sha="$SHA" -f force=true >/dev/null
+              -f sha="$SHA" -F force=true >/dev/null
           else
             gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
               -f ref="refs/tags/latest" -f sha="$SHA" >/dev/null
@@ -380,4 +380,3 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           STABLE: ${{ steps.promote.outputs.stable_tag }}
         run: gh workflow run ci.yml --ref "$STABLE"
-
