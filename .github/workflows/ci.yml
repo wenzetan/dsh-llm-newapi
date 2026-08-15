@@ -81,15 +81,16 @@ jobs:
         run: |
           git clone --depth 1 https://github.com/omdsh-dev/dsh-plugin-check /tmp/pc
           cd /tmp/pc
-          npm install --no-audit --no-fund
-          npm run build
-          # Runtime peers of the built entry (defineTool comes from
-          # dsh-tools). legacy-peer-deps: the checker only needs these to
-          # load; their own transitive peer pins conflict across rc versions.
-          npm install --no-audit --no-fund --no-save --legacy-peer-deps \
+          # One install for devDependencies AND the built entry's runtime
+          # peers (defineTool comes from dsh-tools): a second --no-save
+          # install would reconcile the tree and remove the first set.
+          # legacy-peer-deps: the checker only needs these to load; their own
+          # transitive peer pins conflict across rc versions.
+          npm install --no-audit --no-fund --legacy-peer-deps \
             @deepseek-ai/dsh-tools@0.0.1-rc.1 \
             @deepseek-ai/cordis@4.0.1 \
             @deepseek-ai/dsh-invariants@0.0.1-rc.5
+          npm run build
       - name: plugin_check verdict is pass
         run: |
           node --input-type=module -e "
