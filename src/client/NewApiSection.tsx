@@ -129,12 +129,8 @@ const NS = 'llm-newapi'
 /** Credential reference the host half resolves per request (see apply.ts). */
 const KEY_REF = 'newapi'
 
-/** Conventional local proxy ports offered as presets. */
-const PROXY_PRESETS = [
-  'http://127.0.0.1:7890',
-  'http://127.0.0.1:7897',
-  'http://127.0.0.1:10809',
-] as const
+/** The proxy text box's default and placeholder (mirrors the host default). */
+const DEFAULT_PROXY_URL = 'http://127.0.0.1:7890'
 
 /** Convert a stored section value into editable rows without dropping fields. */
 function toDrafts(source: unknown): ModelDraft[] {
@@ -181,7 +177,7 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set())
   /** Proxy draft for the models.dev download; persisted with the section. */
   const [proxyEnabled, setProxyEnabled] = useState(false)
-  const [proxyUrl, setProxyUrl] = useState<string>(PROXY_PRESETS[0])
+  const [proxyUrl, setProxyUrl] = useState<string>(DEFAULT_PROXY_URL)
   /** models.dev lookup result the params panel resolves against. */
   const [params, setParams] = useState<ModelsDevParamsResponse | undefined>(undefined)
   /** Chosen match index per model id, for ids with several providers. */
@@ -283,7 +279,7 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
       ops.push({
         op: 'set',
         path: ['proxy'],
-        value: { enabled: proxyEnabled, url: proxyUrl.trim().length > 0 ? proxyUrl.trim() : PROXY_PRESETS[0] },
+        value: { enabled: proxyEnabled, url: proxyUrl.trim().length > 0 ? proxyUrl.trim() : DEFAULT_PROXY_URL },
       })
       ops.push({
         op: 'set',
@@ -582,24 +578,12 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
           </label>
           {proxyEnabled
             ? (
-              <>
-                <select
-                  className="newapi-select" aria-label={t('proxyPreset')}
-                  value={PROXY_PRESETS.includes(proxyUrl as (typeof PROXY_PRESETS)[number]) ? proxyUrl : 'custom'}
-                  onChange={(event) => {
-                    if (event.target.value !== 'custom') setProxyUrl(event.target.value)
-                  }}
-                >
-                  {PROXY_PRESETS.map(preset => <option key={preset} value={preset}>{preset}</option>)}
-                  <option value="custom">{t('proxyCustom')}</option>
-                </select>
-                <input
-                  className="newapi-input" type="text" style={{ maxWidth: 220 }}
-                  aria-label={t('proxyUrl')} placeholder="http://127.0.0.1:7890"
-                  value={proxyUrl}
-                  onChange={(event) => { setProxyUrl(event.target.value) }}
-                />
-              </>
+              <input
+                className="newapi-input" type="text" style={{ maxWidth: 220 }}
+                aria-label={t('proxyUrl')} placeholder={DEFAULT_PROXY_URL}
+                value={proxyUrl}
+                onChange={(event) => { setProxyUrl(event.target.value) }}
+              />
             )
             : null}
         </div>

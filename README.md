@@ -26,13 +26,13 @@ dsh plugin --profile web add "github:wenzetan/dsh-llm-newapi"
 # 3. 重启 dsh web
 ```
 
-更新：重跑第 1 步后重启即可。锁定版本改用 tag 引用：`github:wenzetan/dsh-llm-newapi#v0.6.0`。
+更新：重跑第 1 步后重启即可。锁定版本改用 tag 引用：`github:wenzetan/dsh-llm-newapi#v0.6.1`。
 
 **方式 B：Release tarball（免 GitHub 克隆）**
 
 ```sh
 dsh plugin --profile web add \
-  https://github.com/wenzetan/dsh-llm-newapi/releases/download/v0.6.0/dsh-llm-newapi-0.6.0.tgz
+  https://github.com/wenzetan/dsh-llm-newapi/releases/download/v0.6.1/dsh-llm-newapi-0.6.1.tgz
 # 同方式 A 的第 2、3 步
 ```
 
@@ -91,6 +91,8 @@ npm test                       # cordis 实挂载 smoke：注册面 + chat-only 
 改源码后须重跑 `npm run build` 并**提交 `lib/`**——`github:` 安装从提交的产物运行，CI 的「Committed artifacts are current」步骤会在产物过期时拒绝。
 
 ## 状态
+
+v0.6.1：代理控件简化——取消预置下拉框，只保留单一文本框，默认值与占位符均为 `http://127.0.0.1:7890`（清空保存时回退该默认）。
 
 v0.6.0：参数结果面板重排——模型 id 为固定 30ch 文本框（左对齐，超宽内容悬停横向滚动，行对齐不再漂移），右侧映射列显式左对齐；「从models.dev获取模型信息」完成后新增即时反馈：状态行显示「匹配 N · 未匹配 M」计数，且结果面板自动滚动进入视野（长模型列表不再把面板挤到视口外）。
 
