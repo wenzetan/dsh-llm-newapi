@@ -86,7 +86,10 @@ dsh plugin --profile web add link:$(pwd)
 ```sh
 npm install && npm run build   # host: tsc 类型 + esbuild → lib/index.js；client: closure-factory → lib/client.js
 npm test                       # cordis 实挂载 smoke：注册面 + chat-only 过滤 + fiber 释放
+npm run cache:models-dev      # 本地缓存 models.dev/api.json 到 .cache/（gitignored，开发用）
 ```
+
+**models.dev 开发缓存**：`.cache/models-dev.api.json` 不入库，供开发时翻看目录真实字段形状（`limit.context/output`、`reasoning_options`）；smoke 的可选块检测到它存在时，会用真实数据校验 `matchModelsDev`（缺失则跳过，CI 不受影响）。刷新优先直连 models.dev，其次走 `HTTPS_PROXY` 环境变量；两者皆不可达时自动从 GitHub 源（sst/models.dev 的模型 TOML）合成一份子集快照并标记 `_source`。
 
 改源码后须重跑 `npm run build` 并**提交 `lib/`**——`github:` 安装从提交的产物运行，CI 的「Committed artifacts are current」步骤会在产物过期时拒绝。
 

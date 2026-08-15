@@ -42,6 +42,7 @@
     "build:client": "node scripts/build-client.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.client.json",
     "test": "npm run test:client && node test/smoke.mjs",
+    "cache:models-dev": "node scripts/fetch-models-dev.mjs",
     "test:client": "vitest run"
   },
   "keywords": [

@@ -7,6 +7,7 @@
  * settings write point refusing sections the adapter cannot serve.
  */
 import assert from 'node:assert/strict'
+import { existsSync, readFileSync } from 'node:fs'
 import { Context, Service } from '@deepseek-ai/cordis'
 import LlmRuntime, { resolveRetryPolicy } from '@deepseek-ai/dsh-llm'
 import SettingsProvider, { settingsNamespace } from '@deepseek-ai/dsh-settings'
@@ -329,6 +330,30 @@ function stubModelsListing() {
       && error.message.includes('the proxy at http://127.0.0.1:1 is unreachable')
       && !error.message.includes('enable the proxy'),
   )
+}
+
+// ── Block G (optional): real-catalog check against the local dev cache ──
+// .cache/models-dev.api.json (npm run cache:models-dev, gitignored) carries
+// the catalog's real field shapes; when present, matchModelsDev is exercised
+// against it so schema drift in models.dev surfaces here first. Absent, the
+// block skips — CI never has the cache.
+{
+  const CACHE = new URL('../.cache/models-dev.api.json', import.meta.url)
+  if (!existsSync(CACHE)) {
+    console.log('smoke: models.dev dev-cache absent — real-catalog check skipped (npm run cache:models-dev to enable)')
+  } else {
+    const api = JSON.parse(readFileSync(CACHE, 'utf8'))
+    const { matchModelsDev } = plugin
+    const gpt = matchModelsDev(api, 'openai/gpt-5.1')
+    assert.ok(gpt.length >= 1, 'openai/gpt-5.1 matches the cached catalog')
+    assert.ok(gpt.some(match => match.reasoningEfforts?.includes('low') && match.reasoningEfforts.includes('high')),
+      'effort-shaped reasoning_options surface as reasoningEfforts')
+    const chat = matchModelsDev(api, 'deepseek/deepseek-chat')
+    assert.equal(chat[0].contextWindow, 1_000_000)
+    const air = matchModelsDev(api, 'zhipuai/glm-4.5-air')
+    assert.equal(air[0].maxTokens, 98_304)
+    console.log('smoke: models.dev dev-cache check OK (real catalog shapes verified)')
+  }
 }
 
 console.log('smoke: llm-newapi registrations, chat-only discovery, credentials-service key, settings validation, ordering, display names, models.dev matching, deferred RPC channel, and dead-proxy diagnostics OK')
