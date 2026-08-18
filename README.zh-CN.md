@@ -115,6 +115,8 @@ npm run cache:models-dev      # 本地缓存 models.dev/api.json 到 .cache/（g
 
 ## 状态
 
+v0.8.3：tool-call id/name delta 加固（#1）——部分网关（glm-5.3 经 qcplay）在 tool-call 后续 delta 中把 `id`/`function.name` 以**空字符串**重复下发而非省略字段，原先「字段存在即覆盖」的合并把首段收到的真实工具名覆盖为空，所有工具调用统一报 `unknown tool`；翻译层现仅接受非空的 `id`/`name`（与 text/reasoning delta 已有的非空守卫一致），arguments 拼接不变。
+
 v0.8.1：预设思考等级——模型行高级区的等级字段改为下拉选择，用户可将某一档设为默认（`defaultReasoningEffort` 持久化），未预设时缺省取声明档位中的**最高档**（max>xhigh>high>medium>low>…）；`resolveModel` 声明 `defaultEffort`，composer 切换思考模式时自动选中该档。写入校验：预设必须属于该模型的等级列表。
 
 v0.8.0：参数匹配引擎重构——**家族 hints 内建 + 近似键匹配 + 可配置覆盖**。内建家族默认（glm→zai、gpt→openai、claude→anthropic、deepseek→deepseek、gemini→google、grok→xai、qwen→alibaba、kimi→moonshotai、mimo→xiaomi、minimax→minimax、hunyuan→tencent）在候选中把官方条目置首并标「官方」；官方 vendor 内支持**近似键**（目录未收录该版本时取家族最接近条目，如 glm-5.3→zai 的 glm-5），跨 vendor 不近似以防噪声；`providerHints` 配置可覆盖/扩展（`defaults` 家族前缀 + `models` 逐 id 精确，逐 id 优先）。次序：hint 官方 → 精确键（目录序）→ registry 官方补充。实测 22 个模型 20 个官方直取（含真实思考等级），qwen27b-coder 无匹配（目录无此 id），tencent/Hunyuan-MT-7B 落 nano-gpt（官方 tencent 无此模型）。

@@ -437,7 +437,68 @@ function stubModelsListing() {
   )
 }
 
-// ── Block G (optional): real-catalog check against the local dev cache ──
+// ── Block G: empty-string tool-call id/name deltas never clobber the call (issue #1) ──
+// The qcplay gateway (glm-5.3) repeats `id`/`function.name` on every
+// continuation delta as EMPTY strings instead of omitting the fields; a
+// presence-only check overwrote the first delta's real tool name with '',
+// so every tool call died as `unknown tool`. The stream path is exercised
+// end to end — adapter.stream → fetch stub → parseSse → translate.
+{
+  const adapter = new plugin.NewApiAdapter({
+    options: () => ({
+      baseURL: 'http://gw.local:3000/v1',
+      apiKeyRef: 'newapi',
+      models: [],
+      modelExcludePatterns: [],
+      defaultContextWindow: 128_000,
+      streamIdleTimeoutMs: 300_000,
+      retryPolicy: resolveRetryPolicy(undefined, 'smoke'),
+    }),
+    resolveApiKey: async () => 'smoke-key',
+  })
+
+  // Verbatim issue shapes: real id/name only on the first delta, empty
+  // strings on every continuation (one delta also repeats an empty id).
+  const deltas = [
+    { index: 0, id: 'call_5f62a3f002704343bf16a3d7', type: 'function', function: { name: 'get_time', arguments: '{"' } },
+    { index: 0, type: 'function', function: { name: '', arguments: 'tz' } },
+    { index: 0, id: '', type: 'function', function: { name: '', arguments: '":"Asia/Shanghai"}' } },
+  ]
+  const sse = [
+    ...deltas.map(delta => `data: ${JSON.stringify({ choices: [{ delta: { tool_calls: [delta] } }] })}\n\n`),
+    `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'tool_calls' }] })}\n\n`,
+    'data: [DONE]\n\n',
+  ].join('')
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async () => new Response(sse, { status: 200, headers: { 'content-type': 'text/event-stream' } })
+  let chunks
+  try {
+    chunks = []
+    for await (const chunk of adapter.stream({
+      model: 'glm-5.3',
+      messages: [{ role: 'user', content: [{ type: 'text', text: 'what time is it in Shanghai?' }] }],
+    })) chunks.push(chunk)
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+
+  const ended = chunks.filter(chunk => chunk.type === 'block-end')
+  assert.equal(ended.length, 1)
+  const block = ended[0].block
+  assert.equal(block.type, 'tool-call')
+  // The first delta's real identity survives the empty-string continuations.
+  assert.equal(block.id, 'call_5f62a3f002704343bf16a3d7')
+  assert.equal(block.name, 'get_time')
+  assert.equal(block.arguments, '{"tz":"Asia/Shanghai"}')
+  // No emitted delta ever carried the empty name: it would surface in the
+  // composer's live tool-call rendering before the block ends.
+  for (const chunk of chunks) {
+    if (chunk.type === 'tool-call-delta') assert.ok(chunk.name !== '', 'delta name must not degrade to empty')
+  }
+  assert.equal(chunks.at(-1).reason.kind, 'tool-calls')
+}
+
+// ── Block H (optional): real-catalog check against the local dev cache ──
 // .cache/models-dev.api.json (npm run cache:models-dev, gitignored) carries
 // the catalog's real field shapes; when present, matchModelsDev is exercised
 // against it so schema drift in models.dev surfaces here first. Absent, the
@@ -461,4 +522,4 @@ function stubModelsListing() {
   }
 }
 
-console.log('smoke: llm-newapi registrations, chat-only discovery, credentials-service key, settings validation, ordering, display names, models.dev matching, deferred RPC channel, and dead-proxy diagnostics OK')
+console.log('smoke: llm-newapi registrations, chat-only discovery, credentials-service key, settings validation, ordering, display names, models.dev matching, deferred RPC channel, dead-proxy diagnostics, and empty-string tool-call delta hardening OK')

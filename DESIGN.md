@@ -57,7 +57,7 @@ NewAPI 与 DeepSeek 官方端点同为 OpenAI 兼容 chat-completions + SSE，�
 - **注册期捕获的唯一事实**是 retryPolicy：变更时 `registration.replace(['newapi'])` 原子换路由（不能 dispose+重注册，会发布空路由窗口）。
 - **凭证**（v0.3 起）：key 只经 `ctx.get('credentials')` seam 解析固定引用 `newapi`（web 设置页写 managed store），**无 env 回退**。credentials 服务自身的顶层只读层就是继承环境——`NEWAPI_API_KEY` 式引用会被环境同名变量遮蔽并锁死前端输入框，故引用名固定为 `newapi`。缺 key 抛 `MISSING_CREDENTIAL` 并指向设置页（load 不失败，首个请求失败）。
 - **序列化细节**：assistant 无文本 turn 回放 `content: ""`（绝不 null，部分网关 400）；`reasoning_content` 仅在 tool-call turn 回传（上游为 DeepSeek 系模型时的 passback 契约；其余 OpenAI 兼容端点忽略未知字段，实测安全）；tool 空输出回放 `'(no output)'`。
-- **流协议**：`[DONE]` 哨兵必须到达否则 `STREAM_CLOSED`；usage/finish 全部延迟到 `[DONE]` 后发出；`stop` 且零 block ⇒ `EMPTY_RESPONSE` 错误 finish。`reasoning_content` delta（上游 R1 系模型经 NewAPI 透传）→ reasoning block，翻译层原样支持。
+- **流协议**：`[DONE]` 哨兵必须到达否则 `STREAM_CLOSED`；usage/finish 全部延迟到 `[DONE]` 后发出；`stop` 且零 block ⇒ `EMPTY_RESPONSE` 错误 finish。`reasoning_content` delta（上游 R1 系模型经 NewAPI 透传）→ reasoning block，翻译层原样支持。tool-call delta 的 `id`/`name` 仅接受非空值——部分网关（glm-5.3 经 qcplay）在后续 delta 以空串重复下发而非省略字段，存在性判断会把首段真实值覆盖为空（#1）。
 - **usage 映射**：`prompt_tokens` 含缓存命中，减去 `prompt_tokens_details.cached_tokens`（OpenAI 兼容拼法）保持 harness 不相交计数约定。
 - **错误映射**：401/403→`AUTH`、429→`RATE_LIMIT`、400→`INVALID_REQUEST`（配额/上下文超限文案识别）、5xx→`SERVER`、`retry-after` 头解析为 `providerRetryAfterMs`。
 

@@ -117,11 +117,20 @@ export interface WireDelta {
 export interface WireToolCallDelta {
   /** Disambiguates parallel tool calls; stable across a call's deltas. */
   index: number
-  /** Present on the first delta of each call only. */
+  /**
+   * Present on the first delta of each call only. Non-conforming gateways
+   * repeat it as an EMPTY string on continuation deltas (instead of
+   * omitting the field); the translator only accepts non-empty values so
+   * the real id from the first delta survives (issue #1).
+   */
   id?: string
   type?: 'function'
   function?: {
-    /** Present on the first delta of each call only. */
+    /**
+     * Present on the first delta of each call only. Non-conforming gateways
+     * repeat it as an EMPTY string on continuation deltas; only non-empty
+     * values are accepted so the tool name survives (issue #1).
+     */
     name?: string
     /** Argument JSON fragment (concatenate across deltas). */
     arguments?: string

@@ -155,8 +155,12 @@ export async function* translate(payloads: AsyncIterable<string>): AsyncGenerato
           toolBlocks.set(call.index, block)
           yield { type: 'block-start', index: block.index, blockType: 'tool-call' }
         }
-        if (call.id !== undefined) block.callId = call.id
-        if (call.function?.name !== undefined) block.name = call.function.name
+        // Non-empty guards: some gateways (glm-5.3 via qcplay) repeat
+        // `id`/`name` on every delta as EMPTY strings instead of omitting
+        // the field; a presence check alone would clobber the real values
+        // carried by the first delta (issue #1).
+        if (call.id !== undefined && call.id.length > 0) block.callId = call.id
+        if (call.function?.name !== undefined && call.function.name.length > 0) block.name = call.function.name
         const fragment = call.function?.arguments ?? ''
         block.text += fragment
         yield {
