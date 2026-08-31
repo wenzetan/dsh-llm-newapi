@@ -65,6 +65,18 @@ dsh plugin --profile web add link:$(pwd)
 
 After install: a "NewAPI" page appears in the settings panel → fill in the API key and the gateway address (including `/v1`) → "Fetch model info" pulls the model list and lets you pick chat models (embedding / rerank / ranker are filtered automatically) → save. The `newapi` route's models then show up in the model picker (composer).
 
+## Verified host compatibility
+
+"Verified" means the versions this repo actually develops against locally, exercised by the automated suites — not hearsay. For any other host version, `npm run test:host` is the authoritative check.
+
+| Host line | `@deepseek-ai/dsh-llm` it ships | Loads | Verified by |
+| --- | --- | --- | --- |
+| dsh `0.1.1-rc` (local dev host `0.1.1-rc.2`; workspace build/typecheck target `0.0.1-rc.5`) | `0.1.1-rc.2` / `0.0.1-rc.5` | ✅ | full behavior suites — `npm test` (cordis real-mount smoke: registration, streaming translate, tool-call assembly, settings writes; vitest client) + `npm run typecheck` |
+| dsh `0.1.2-alpha` (npm dist-tag `alpha`) | `0.1.2-alpha.2` | ✅ | `npm run test:host` — export gate (every runtime `@deepseek-ai/dsh-llm` import in the built entry exists on **both** the rc and alpha surfaces) + an offline ESM link fixture that reproduces the issue #3 loader failure against the alpha surface |
+
+- The alpha line renamed the `dsh-llm` export `CallId` → `ToolCallId`; releases up to `0.8.3-rc.1` import it at runtime and their whole loader entry dies at ESM link time on alpha hosts (issue #3). The fix brands tool-call ids locally and imports no branding helper at runtime, so one build loads on both lines.
+- Untested host patches are expected to work when their `dsh-llm` surface matches; the checked-in alpha surface snapshot (`test/fixtures/dsh-llm-alpha-0.1.2-alpha.2.exports.json`, captured from the real npm tarball) is what the gate compares against — regenerate it per new host line.
+
 ## Configuration (cordis.yml entry config; after install the `llm-newapi:` section in settings.yaml hot-reloads and overrides it)
 
 ```yaml
@@ -105,7 +117,7 @@ After install: a "NewAPI" page appears in the settings panel → fill in the API
 
 ```sh
 npm install && npm run build   # host: tsc types + esbuild → lib/index.js; client: closure-factory → lib/client.js
-npm test                       # cordis real-mount smoke: registration surface + chat-only filter + fiber release
+npm test                       # vitest client + host-compat gate (rc/alpha export surfaces, issue #3 link fixture) + cordis real-mount smoke
 npm run cache:models-dev      # cache models.dev/api.json locally to .cache/ (gitignored, for development)
 ```
 

@@ -42,9 +42,10 @@
     "build:host": "tsc -p tsconfig.json && node scripts/build-host.mjs",
     "build:client": "node scripts/build-client.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.client.json",
-    "test": "npm run test:client && node test/smoke.mjs",
+    "test": "npm run test:client && npm run test:host && node test/smoke.mjs",
     "cache:models-dev": "node scripts/fetch-models-dev.mjs",
-    "test:client": "vitest run"
+    "test:client": "vitest run",
+    "test:host": "node test/host-compat.mjs"
   },
   "keywords": [
     "dsh",

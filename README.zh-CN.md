@@ -65,6 +65,18 @@ dsh plugin --profile web add link:$(pwd)
 
 装好后：设置面板出现「NewAPI」页 → 填 API key 与网关地址（含 `/v1`）→「获取模型」拉取并勾选 chat 模型（embedding / rerank / ranker 自动过滤）→ 保存。模型选择器（composer）即出现 `newapi` 路由的模型。
 
+## 已验证宿主适配表
+
+「已验证」指本仓库本地实际开发所用的版本，由自动化测试套件实证——而非道听途说。其他宿主版本以 `npm run test:host` 的结果为准。
+
+| 宿主线 | 自带 `@deepseek-ai/dsh-llm` | 可装载 | 验证方式 |
+| --- | --- | --- | --- |
+| dsh `0.1.1-rc`（本地开发宿主 `0.1.1-rc.2`；workspace 构建/类型检查目标 `0.0.1-rc.5`） | `0.1.1-rc.2` / `0.0.1-rc.5` | ✅ | 全量行为套件——`npm test`（cordis 实挂载 smoke：注册面、流式 translate、tool-call 组装、settings 写入；vitest 客户端）+ `npm run typecheck` |
+| dsh `0.1.2-alpha`（npm dist-tag `alpha`） | `0.1.2-alpha.2` | ✅ | `npm run test:host`——导出门禁（构建产物对 `@deepseek-ai/dsh-llm` 的每个运行时导入在 rc、alpha **两个**导出面上都存在）+ 离线 ESM 链接 fixture（对 alpha 面复现 issue #3 的装载失败） |
+
+- alpha 线把 `dsh-llm` 的导出 `CallId` 改名为 `ToolCallId`；`0.8.3-rc.1` 及之前的版本在运行时导入它，整个 loader entry 在 alpha 宿主上于 ESM 链接期即死（issue #3）。修复改为本地做 tool-call id 的品牌标注，运行时不再导入任何品牌辅助函数，一份构建同时适配两条线。
+- 未逐点测试的宿主 patch，只要其 `dsh-llm` 导出面一致即预期可用；门禁比对的 alpha 面快照入库于 `test/fixtures/dsh-llm-alpha-0.1.2-alpha.2.exports.json`（取自真实 npm tarball），换宿主线时重新生成。
+
 ## 配置（cordis.yml entry config；装机后 settings.yaml `llm-newapi:` 段热更新覆盖）
 
 ```yaml
@@ -105,7 +117,7 @@ dsh plugin --profile web add link:$(pwd)
 
 ```sh
 npm install && npm run build   # host: tsc 类型 + esbuild → lib/index.js；client: closure-factory → lib/client.js
-npm test                       # cordis 实挂载 smoke：注册面 + chat-only 过滤 + fiber 释放
+npm test                       # vitest 客户端 + host-compat 门禁（rc/alpha 导出面、issue #3 链接 fixture）+ cordis 实挂载 smoke
 npm run cache:models-dev      # 本地缓存 models.dev/api.json 到 .cache/（gitignored，开发用）
 ```
 
