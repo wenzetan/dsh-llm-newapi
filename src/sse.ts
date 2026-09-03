@@ -29,12 +29,23 @@ export async function* parseSse(
   stream: ReadableStream<BufferSource>,
   onComment?: (comment: string) => void,
 ): AsyncGenerator<string> {
+  // Read through the reader instead of `for await … of`: `ReadableStream`
+  // async iteration is not declared as a type across every TypeScript lib
+  // version (TS ≥ 6 augments it; 5.9 does not), so a for-await would pin the
+  // build to one compiler. A reader loop is type- and runtime-identical.
   const events = stream
     .pipeThrough(new TextDecoderStream())
     .pipeThrough(new EventSourceParserStream({ onComment }))
-  for await (const { data } of events) {
-    yield data
-    if (data === DONE) return
+  const reader = events.getReader()
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      yield value.data
+      if (value.data === DONE) return
+    }
+  } finally {
+    reader.releaseLock()
   }
   throw new LlmError('SSE stream ended without [DONE]', 'STREAM_CLOSED')
 }

@@ -33,7 +33,9 @@ ctx.llm.registerConfigurableProviders([{ provider: 'newapi', displayName: 'NewAP
   settingsNs: NS, settingsPath: [], declared: true }])
 ctx.llm.registerAdapter(['newapi'], adapter)          // 唯一必需
 ctx.llm.registerModelDiscovery(NS, discover)          // Models 页「探测端点」按钮
-installSettingsSection(ctx, NS, Config, config, {...}) // settings.yaml 热更新分层
+// 0.1.2-rc.1 seam：settings 段经 settings 服务安装（installSection），
+// 替换已移除的顶层 installSettingsSection(ctx, NS, Config, config, {...})
+ctx.inject(['settings'], sc => sc.settings.installSection(ctx, NS, Config, config, {...})) // settings.yaml 热更新分层
 ```
 
 `declared: true`：该路由完全由配置声明（网关部署，插件不内置任何模型事实）——正是 `LlmConfigurableProvider.declared` 字段文档描述的场景。
@@ -117,13 +119,13 @@ Models 页编辑草稿时经 `ctx.llm.discoverModels('llm-newapi', { baseURL?, a
 
 ## 8. Web 设置页（Models）实证结论与路线决策 ⚠️
 
-源码实证（`packages/client/ui-settings-models/`、`packages/client/modules/`）的关键事实：
+源码实证（`packages/client/ui-settings-models/`、`packages/client/modules/`，dsh 0.1.2-rc.1）的关键事实：
 
 1. **Models 页编辑卡的「获取模型」按钮只认官方两命名空间**：`ModelListEditor`（fetch 按钮）仅被 `ProviderEditor` 的 `deepseek`/`pi-ai` 家族布局渲染；`layoutOf()` 硬编码，自定义命名空间（`llm-newapi`）走 `unknown` 布局——只有一行提示，连 key 输入框都没有。
-2. **~~浏览器 bundle 构建期组装、外部插件无法注入~~（此断言已被推翻）**：`ClientModuleRegistry`（`packages/client/modules/src/index.ts`）在**运行时**扫描 loader 当前组合的全部插件行（`ctx.loader.entries()`），从配置树锚点（`ctx.baseUrl`）`require.resolve` 每个包的 package.json——带 `dsh.client` manifest 的插件，其 `lib/client.js` 被注册进 web bundle 图（`/plugins` 前缀路由 + `tapIndex` 注入 `window.__DSH_BOOT__`）。**外部插件的浏览器侧可被动态发现，不需要重建 dsh web。**
+2. **~~浏览器 bundle 构建期组装、外部插件无法注入~~（此断言已被推翻）**：`ClientModuleRegistry`（`packages/client/modules/src/index.ts`）在**运行时**扫描 loader 当前组合的全部插件行（`ctx.loader.entries()`），读取带 `dsh.client.platform: 'web'` manifest 的包、解析其 `exports["./client"]` 产物，以内容寻址 combo URL（`/plugins/??…&rev=`）注入 `window.__DSH_BOOT__` 图。**外部插件的浏览器侧可被动态发现，不需要重建 dsh web。**
 3. **`settings.section` 是 `kind: 'list'` 多贡献 slot**（`packages/client/ui-settings/src/client/contract/slots.ts`），注册选项 `id`/`order`/`label`；契约注释原文：*"A feature owns its own settings pages — adding a setting never means editing the shell"*——设置页为功能自有，加设置永远不改 shell。**外部插件可注册自己的设置页。**
-4. **client bundle 产物格式**：closure-factory——bundle 调 `window.__ModuleLoader__.load({id, factory})`，externals（`@deepseek-ai/dsh-client-*`、cordis）经注入的 require 从 loader 模块表解析；仓库内 `clientBundle` tsdown preset 未发布 npm，外部插件可用 esbuild 复刻该格式。
-5. **npm 依赖全部可得**：`@deepseek-ai/dsh-llm@0.0.1-rc.1`、`dsh-client-runtime@0.0.1-rc.1`、`dsh-client-ui-settings@…`、`cordis@4.0.1` 均已发布（peerDeps 已对齐）。
+4. **client bundle 产物格式**：closure-factory——bundle 调 `window.__ModuleLoader__.load({id, factory})`；loader 模块表提供 shell seed 词（react/jsx-runtime、cordis、`dsh-client-store`/`ui-slots`/`ui-primitives`），所有 dsh 类型面（`.../client`、`/types`）在插件内均为 type-only、构建期擦除，插件值依赖只有 react。仓库内 `clientBundle` tsdown preset 未发布 npm，外部插件可用 esbuild 复刻该格式。
+5. **npm 依赖全部可得**：`@deepseek-ai/dsh-llm@0.1.2-rc.1`、`dsh-api-remotes@0.1.2-rc.1`、`dsh-client-locale@…`、`cordis@4.0.1` 等均已发布（devDeps 已对齐当前 seam；`dsh-client-runtime` 在 0.1.2-rc.1 已不存在）。
 6. **`llm-pi-ai` 默认随 dsh-base 挂载（dormant）**，其发现服务支持 OpenAI 兼容 `GET /models` 但**无 chat-only 过滤**。
 7. **settings 是 base 层 + 用户层路径级叠加**：组合 entry config 作 base，Web 编辑写路径级 ops 盖上；base 层播种不会被用户编辑冲掉。
 

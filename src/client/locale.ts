@@ -3,6 +3,17 @@
  * first (the dsh web convention); English mirrors it.
  */
 
+// Type-only: pulls the shell's LocaleNamespaceMap so the merge below (and
+// every PropsLocale seat typing `t` over `settings.newapi`) resolves.
+import type {} from '@deepseek-ai/dsh-client-ui-slots'
+
+declare module '@deepseek-ai/dsh-client-ui-slots' {
+  interface LocaleNamespaceMap {
+    /** The NewAPI settings section copy. */
+    'settings.newapi': NewApiKey
+  }
+}
+
 export const zh = {
   nav: 'NewAPI',
   intro: '配置 NewAPI 网关：API 密钥、网关地址与模型列表。模型发现只列出支持 chat 接口的模型。',

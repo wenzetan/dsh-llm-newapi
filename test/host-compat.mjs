@@ -1,27 +1,31 @@
 /**
- * Host-line compatibility gate for the built plugin (issue #3).
+ * Host-line compatibility gate for the built plugin.
  *
- * The host alpha line (dsh 0.1.2-alpha) ships an `@deepseek-ai/dsh-llm` whose
- * export surface drifted from the rc line: `CallId` was renamed to
- * `ToolCallId`. A static named import of a drifted symbol makes the whole
- * `llm-newapi` loader entry die at ESM link time (`SyntaxError: … does not
- * provide an export named 'CallId'`) — before any provider code runs.
+ * The plugin builds and typechecks against the dsh 0.1.2-rc.1 seam
+ * (`@deepseek-ai/dsh-llm` 0.1.2-rc.1). A static named runtime import of a
+ * symbol the HOST's dsh-llm does not export makes the whole `llm-newapi`
+ * loader entry die at ESM link time (`SyntaxError: … does not provide an
+ * export named 'X'`) — before any provider code runs. This gate pins that
+ * contract: the built entry may only import dsh-llm symbols that exist on
+ * the workspace-resolved surface AND on the checked-in 0.1.2-rc.1 surface
+ * snapshot (captured from the published package), so a rename on either side
+ * is caught here instead of in a booting host.
  *
  * Three blocks:
  *  A. Export gate (always): every `@deepseek-ai/dsh-llm` named runtime import
  *     in the built host entry `lib/index.js` must exist on BOTH the
- *     workspace-resolved rc surface (live import — the line we build and
- *     typecheck against) and the checked-in alpha surface snapshot
- *     (test/fixtures/dsh-llm-alpha-*.exports.json). Subpath imports of the
+ *     workspace-resolved surface (live import — the line we build and
+ *     typecheck against) and the checked-in 0.1.2-rc.1 surface snapshot
+ *     (test/fixtures/dsh-llm-0.1.2-rc.1.exports.json). Subpath imports of the
  *     package are rejected: only the root entry is covered by the snapshot.
- *  B. Alpha link fixture (always, offline): a scratch `node_modules` layout
- *     shadows `@deepseek-ai/dsh-llm` with a stub exposing exactly the alpha
+ *  B. Surface link fixture (always, offline): a scratch `node_modules` layout
+ *     shadows `@deepseek-ai/dsh-llm` with a stub exposing exactly the
  *     snapshot names (universal dummies), while every other dependency
  *     resolves to the real workspace packages. A child node process must
- *     import the copied plugin entry cleanly — this reproduces the issue #3
- *     failure mode (link-time SyntaxError) without network access.
- *  C. Snapshot drift guard (dev-only): when the real alpha tarball extract is
- *     present (`.tmp-alpha/package`, fetched during investigation / by
+ *     import the copied plugin entry cleanly — this reproduces the
+ *     link-time SyntaxError failure mode without network access.
+ *  C. Snapshot drift guard (dev-only): when the real package extract is
+ *     present (`.tmp-host/package`, fetched during investigation / by
  *     regenerating the snapshot), its export statement is re-parsed and must
  *     match the checked-in snapshot, so the fixture cannot silently rot.
  */
@@ -33,9 +37,9 @@ import { fileURLToPath } from 'node:url'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const BUILT_ENTRY = join(ROOT, 'lib', 'index.js')
-const SNAPSHOT_PATH = join(ROOT, 'test', 'fixtures', 'dsh-llm-alpha-0.1.2-alpha.2.exports.json')
-const SCRATCH = join(ROOT, 'test', '.tmp-host-alpha')
-const REAL_ALPHA_EXTRACT = join(ROOT, '.tmp-alpha', 'package', 'lib', 'index.js')
+const SNAPSHOT_PATH = join(ROOT, 'test', 'fixtures', 'dsh-llm-0.1.2-rc.1.exports.json')
+const SCRATCH = join(ROOT, 'test', '.tmp-host-surface')
+const REAL_HOST_EXTRACT = join(ROOT, '.tmp-host', 'package', 'lib', 'index.js')
 
 /** Parse `import { A, B as C } from "@deepseek-ai/dsh-llm"` occurrences. */
 function namedImportsFrom(source, specifier) {
@@ -54,7 +58,7 @@ function namedImportsFrom(source, specifier) {
   return symbols
 }
 
-/** Export names of the real alpha tarball extract, statically parsed. */
+/** Export names of the real host-package extract, statically parsed. */
 function parseExportStatement(path) {
   const source = readFileSync(path, 'utf8')
   const statements = [...source.matchAll(/export\s*\{([^}]+)\}/g)]
@@ -67,7 +71,7 @@ function parseExportStatement(path) {
   return new Set(names.filter(name => name !== 'default'))
 }
 
-// ── Block A: export gate — runtime imports ⊆ rc surface ∩ alpha surface ──
+// ── Block A: export gate — runtime imports ⊆ workspace surface ∩ host snapshot ──
 {
   assert.ok(existsSync(BUILT_ENTRY), 'lib/index.js is missing — run npm run build:host first')
   const built = readFileSync(BUILT_ENTRY, 'utf8')
@@ -80,21 +84,21 @@ function parseExportStatement(path) {
   assert.ok(imported.size > 0, 'no @deepseek-ai/dsh-llm named imports found in lib/index.js — gate would pass vacuously')
 
   const snapshot = JSON.parse(readFileSync(SNAPSHOT_PATH, 'utf8'))
-  const alpha = new Set(snapshot.exports)
-  const rc = new Set(Object.keys(await import('@deepseek-ai/dsh-llm')))
+  const host = new Set(snapshot.exports)
+  const workspace = new Set(Object.keys(await import('@deepseek-ai/dsh-llm')))
 
-  const missing = { rc: [], alpha: [] }
+  const missing = { workspace: [], host: [] }
   for (const symbol of [...imported.keys()].sort()) {
-    if (!rc.has(symbol)) missing.rc.push(symbol)
-    if (!alpha.has(symbol)) missing.alpha.push(symbol)
+    if (!workspace.has(symbol)) missing.workspace.push(symbol)
+    if (!host.has(symbol)) missing.host.push(symbol)
   }
-  assert.deepEqual(missing.rc, [],
-    `lib/index.js imports @deepseek-ai/dsh-llm symbols absent from the workspace-resolved rc line (${[...rc].length} exports) — the build target drift requires a source change`)
-  assert.deepEqual(missing.alpha, [],
-    `lib/index.js imports @deepseek-ai/dsh-llm symbols absent from the host alpha line ${snapshot.version} (${[...alpha].length} exports) — this is exactly the issue #3 failure: the loader entry dies at ESM link time on alpha hosts`)
+  assert.deepEqual(missing.workspace, [],
+    `lib/index.js imports @deepseek-ai/dsh-llm symbols absent from the workspace-resolved surface (${[...workspace].length} exports) — the build target drift requires a source change`)
+  assert.deepEqual(missing.host, [],
+    `lib/index.js imports @deepseek-ai/dsh-llm symbols absent from the pinned host surface ${snapshot.version} (${[...host].length} exports) — the loader entry would die at ESM link time on such a host`)
 }
 
-// ── Block B: link the built plugin against an alpha-surface stub host ──
+// ── Block B: link the built plugin against a host-surface stub ──
 {
   rmSync(SCRATCH, { recursive: true, force: true })
   const stubPkgDir = join(SCRATCH, 'node_modules', '@deepseek-ai', 'dsh-llm')
@@ -103,10 +107,10 @@ function parseExportStatement(path) {
   const snapshot = JSON.parse(readFileSync(SNAPSHOT_PATH, 'utf8'))
   // Universal dummy: callable, constructable, extendable (class X extends …),
   // property-access chainable — good enough for module link AND top-level
-  // evaluation; no alpha behavior is exercised by this block.
+  // evaluation; no host behavior is exercised by this block.
   writeFileSync(join(stubPkgDir, 'index.js'), [
     'const makeDummy = () => new Proxy(function dummy() {}, {',
-    '  get: (_t, prop) => (prop === Symbol.toPrimitive ? () => "alpha-stub" : makeDummy()),',
+    '  get: (_t, prop) => (prop === Symbol.toPrimitive ? () => "surface-stub" : makeDummy()),',
     '  apply: () => makeDummy(),',
     '  construct: () => makeDummy(),',
     '})',
@@ -142,27 +146,27 @@ function parseExportStatement(path) {
     ], { encoding: 'utf8', timeout: 60_000 })
   } catch (error) {
     const detail = (error.stdout ?? '') + (error.stderr ?? '')
-    assert.fail(`plugin entry fails to load against the ${snapshot.version} surface stub (issue #3 mode):\n${detail.trim()}`)
+    assert.fail(`plugin entry fails to load against the ${snapshot.version} surface stub:\n${detail.trim()}`)
   }
-  assert.match(stdout, /^PLUGIN-LINK-OK \d+/, 'plugin linked and evaluated against the alpha surface stub')
+  assert.match(stdout, /^PLUGIN-LINK-OK \d+/, 'plugin linked and evaluated against the host surface stub')
   rmSync(SCRATCH, { recursive: true, force: true })
 }
 
 // ── Block C (dev-only): the checked-in snapshot matches the real tarball ──
 {
-  if (!existsSync(REAL_ALPHA_EXTRACT)) {
-    console.log('host-compat: real alpha tarball extract absent — snapshot drift check skipped (dev-only block)')
+  if (!existsSync(REAL_HOST_EXTRACT)) {
+    console.log('host-compat: real host package extract absent — snapshot drift check skipped (dev-only block)')
   } else {
     const snapshot = JSON.parse(readFileSync(SNAPSHOT_PATH, 'utf8'))
-    const real = parseExportStatement(REAL_ALPHA_EXTRACT)
+    const real = parseExportStatement(REAL_HOST_EXTRACT)
     const snap = new Set(snapshot.exports)
     assert.deepEqual(
       { missingFromSnapshot: [...real].filter(n => !snap.has(n)).sort(), staleInSnapshot: [...snap].filter(n => !real.has(n)).sort() },
       { missingFromSnapshot: [], staleInSnapshot: [] },
       `test/fixtures/${SNAPSHOT_PATH.split('/').pop()} no longer matches the real ${snapshot.version} tarball — regenerate it`,
     )
-    console.log('host-compat: snapshot matches the real alpha tarball extract')
+    console.log('host-compat: snapshot matches the real host package extract')
   }
 }
 
-console.log('host-compat: export gate + alpha link fixture OK')
+console.log('host-compat: export gate + host-surface link fixture OK')

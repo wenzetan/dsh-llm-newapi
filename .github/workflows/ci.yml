@@ -86,7 +86,9 @@ jobs:
       - name: Clone and build dsh-plugin-check
         run: |
           git clone --depth 1 https://github.com/omdsh-dev/dsh-plugin-check /tmp/pc
-          npm install -g @deepseek-ai/dsh >/dev/null
+          # The plugin builds against the 0.1.2-rc.1 seam; borrow the checker
+          # symlinks from that exact host line (npm latest is still 0.1.1-rc.2).
+          npm install -g @deepseek-ai/dsh@0.1.2-rc.1 >/dev/null
           cd /tmp/pc
           npm install --no-audit --no-fund --ignore-scripts
           # The built entry imports @deepseek-ai/dsh-tools at runtime
@@ -130,7 +132,7 @@ jobs:
         with:
           node-version: 24
       - name: Install dsh and pnpm
-        run: npm install -g @deepseek-ai/dsh pnpm
+        run: npm install -g @deepseek-ai/dsh@0.1.2-rc.1 pnpm
       - name: Install the packed tarball into a fresh web profile
         run: |
           set -euo pipefail
@@ -184,13 +186,17 @@ jobs:
             exit 1
           fi
           echo "web ready on :3080"
-          # The plugin's browser half is served for the module loader.
-          client="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:3080/plugins/dsh-llm-newapi/client.js")"
-          if [ "$client" != "200" ]; then
-            echo "::error::client bundle not served (HTTP $client)"
+          # The plugin's browser half is composed into the boot graph: the
+          # ClientModuleRegistry serves content-addressed combo URLs under
+          # /plugins/??…&rev=… (0.1.2-rc.1), referenced from the served page's
+          # window.__DSH_BOOT__ rows — there is no static client.js path.
+          page="$(curl -s http://127.0.0.1:3080/)"
+          if ! printf '%s' "$page" | grep -Fq 'dsh-llm-newapi/client.js'; then
+            echo "::error::plugin client bundle absent from the boot page graph"
             cat "$LOG"
             exit 1
           fi
+          echo "client bundle referenced in the boot graph"
           # The plugin's RPC channel exists: any answer but 405 proves the
           # route registered (405 is the SPA fallback rejecting a POST).
           rpc="$(curl -s -o /dev/null -w '%{http_code}' -X POST \
@@ -202,7 +208,7 @@ jobs:
             cat "$LOG"
             exit 1
           fi
-          echo "boot gate passed: web ready, client bundle HTTP $client, RPC channel HTTP $rpc"
+          echo "boot gate passed: web ready, client bundle in boot graph, RPC channel HTTP $rpc"
 
   # A tag like v0.8.2-rc.1 publishes as a TEST version everywhere: GitHub
   # Release marked pre-release, npm under the `next` dist-tag. The stable

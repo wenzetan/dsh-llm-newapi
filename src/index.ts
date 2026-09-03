@@ -18,7 +18,10 @@ import { assertUsableApiKey, LlmError, resolveRetryPolicy, RetryPolicySchema } f
 import type { RetryPolicyConfig } from '@deepseek-ai/dsh-llm'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
-import { deepEqualJson, installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-settings'
+// Type-only: pulls the cordis Context merge that adds the `settings`
+// service (ctx.settings.installSection) into this program.
+import type {} from '@deepseek-ai/dsh-settings'
+import { deepEqualJson } from '@deepseek-ai/dsh-util-values'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import {
   DEFAULT_CONTEXT_WINDOW,
@@ -50,7 +53,7 @@ export type * from './types.ts'
 export const name = 'llm-newapi'
 export const inject = ['llm']
 
-const NS = settingsNamespace('llm-newapi')
+const NS = 'llm-newapi'
 /**
  * Fixed credential reference for the gateway API key. Deliberately not an
  * environment-variable-style name: the inherited process environment is the
@@ -374,8 +377,9 @@ export function apply(ctx: Context, config: Config): void {
   }
   // Model discovery for the settings namespace this plugin owns: the Models
   // page interrogates the gateway's /models with the draft's endpoint and
-  // one-shot credential, or the current snapshot's facts.
-  ctx.llm.registerModelDiscovery(NS, request => adapter.discoverModels(request))
+  // one-shot credential, or the current snapshot's facts. The runtime hands
+  // caller cancellation as a separate signal (0.1.2-rc.1 seam).
+  ctx.llm.registerModelDiscovery(NS, (request, signal) => adapter.discoverModels(request, signal))
 
   // Host-side endpoint for the「更新模型信息」action: the browser names
   // the gateway model ids (and optionally the proxy draft) and the host
@@ -412,21 +416,26 @@ export function apply(ctx: Context, config: Config): void {
             },
           }))
       },
-      { authority: 'loopback' },
     ), 'llm-newapi: models-dev RPC channel')
   })
 
-  installSettingsSection(ctx, NS, Config, config, {
-    // Refuse an unserviceable section where it is written: without this a
-    // schema-valid value the adapter cannot serve (a non-http(s) baseURL,
-    // an empty exclude-pattern entry) stores with a success notice and
-    // then silently keeps the last good facts at every request.
-    validate: (value) => {
-      resolveAdapterOptions(value, launchEnvironmentOf(ctx))
-    },
-    setSource: (source) => {
-      current = source
-    },
-    onChange: ensureRegistrationFacts,
+  // The settings section installs through the `settings` service seam
+  // (0.1.2-rc.1): the consumer registers while the provider is present and
+  // falls back to the composition entry when it detaches, exactly the
+  // layering the old top-level installSettingsSection helper provided.
+  ctx.inject(['settings'], (settingsCtx) => {
+    settingsCtx.settings.installSection(ctx, NS, Config, config, {
+      // Refuse an unserviceable section where it is written: without this a
+      // schema-valid value the adapter cannot serve (a non-http(s) baseURL,
+      // an empty exclude-pattern entry) stores with a success notice and
+      // then silently keeps the last good facts at every request.
+      validate: (value) => {
+        resolveAdapterOptions(value, launchEnvironmentOf(ctx))
+      },
+      setSource: (source) => {
+        current = source
+      },
+      onChange: ensureRegistrationFacts,
+    })
   })
 }

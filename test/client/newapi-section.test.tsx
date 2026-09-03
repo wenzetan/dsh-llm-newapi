@@ -12,39 +12,37 @@ afterEach(cleanup)
 
 const t = (key: keyof typeof en): string => en[key]
 
-/** A wire face answering one resolved llm-newapi section. */
+/** A wire face answering one resolved llm-newapi section (dsh 0.1.2-rc.1 Remote envelopes). */
 function wireFace(overrides: Partial<{
   describeAnswer: unknown
   credentialsAnswer: unknown
 }> = {}) {
   return {
-    settings: {
-      describe: vi.fn(() => Promise.resolve({
-        result: {
-          ok: true,
-          value: overrides.describeAnswer ?? {
-            writable: true,
-            hasDocument: true,
-            namespaces: [{
-              ns: 'llm-newapi',
-              schema: {},
-              value: { baseURL: 'http://gw.local:3000/v1', models: [{ id: 'deepseek-chat', contextWindow: 65536 }] },
-              applies: 'live',
-              secrets: [],
-              revision: 7,
-            }],
-          },
-        },
-      })),
-      mutate: vi.fn(() => Promise.resolve({ result: { ok: true, value: { ns: 'llm-newapi', revision: 8 } } })),
-    },
-    credentials: {
-      describe: vi.fn(() => Promise.resolve({
-        result: { ok: true, value: overrides.credentialsAnswer ?? { credentials: { newapi: { configured: true, writable: true } } } },
-      })),
-      set: vi.fn(() => Promise.resolve({ result: { ok: true, value: undefined } })),
-    },
-    llm: { discoverModels: vi.fn() },
+    describeSettings: vi.fn(() => Promise.resolve({
+      ok: true,
+      value: overrides.describeAnswer ?? {
+        writable: true,
+        hasDocument: true,
+        namespaces: [{
+          ns: 'llm-newapi',
+          schema: {},
+          value: { baseURL: 'http://gw.local:3000/v1', models: [{ id: 'deepseek-chat', contextWindow: 65536 }] },
+          applies: 'live',
+          secrets: [],
+          revision: 7,
+        }],
+      },
+    })),
+    mutateSettings: vi.fn(() => Promise.resolve({
+      ok: true,
+      value: { ns: 'llm-newapi', schema: {}, value: {}, applies: 'live', secrets: [], revision: 8 },
+    })),
+    describeCredentials: vi.fn(() => Promise.resolve({
+      ok: true,
+      value: overrides.credentialsAnswer ?? { newapi: { configured: true, writable: true } },
+    })),
+    setCredential: vi.fn(() => Promise.resolve({ ok: true, value: undefined })),
+    discoverModels: vi.fn(),
   }
 }
 
@@ -79,7 +77,7 @@ describe('NewApiSection mount', () => {
     expect(screen.getByText(t('apply'))).toBeTruthy()
 
     // The mount itself interrogated the settings plane.
-    expect(api.settings.describe).toHaveBeenCalledTimes(1)
+    expect(api.describeSettings).toHaveBeenCalledTimes(1)
   })
 
   it('names the missing namespace when the host has no llm-newapi section', async () => {
@@ -93,7 +91,7 @@ describe('NewApiSection mount', () => {
 
 describe('environment-supplied credential (read-only)', () => {
   const envCredential = {
-    credentials: { newapi: { configured: true, writable: false, source: 'env' } },
+    newapi: { configured: true, writable: false, source: 'env' },
   }
 
   it('locks the key field with the launch-environment placeholder', async () => {
@@ -115,8 +113,8 @@ describe('environment-supplied credential (read-only)', () => {
     fireEvent.change(screen.getByLabelText(t('baseUrl')), { target: { value: 'http://other:3000/v1' } })
     fireEvent.click(screen.getByText(t('apply')))
 
-    await waitFor(() => { expect(api.settings.mutate).toHaveBeenCalledTimes(1) })
-    expect(api.credentials.set).not.toHaveBeenCalled()
+    await waitFor(() => { expect(api.mutateSettings).toHaveBeenCalledTimes(1) })
+    expect(api.setCredential).not.toHaveBeenCalled()
     await waitFor(() => { expect(screen.getByText(t('saved'))).toBeTruthy() })
   })
 })
@@ -165,8 +163,8 @@ describe('models.dev params update', () => {
     fireEvent.click(screen.getByText(t('paramsOverwrite')))
     await waitFor(() => { expect(screen.getByText(new RegExp(t('paramsApplied')))).toBeTruthy() })
     fireEvent.click(screen.getByText(t('apply')))
-    await waitFor(() => { expect(api.settings.mutate).toHaveBeenCalledTimes(1) })
-    const models = api.settings.mutate.mock.calls[0][0].ops
+    await waitFor(() => { expect(api.mutateSettings).toHaveBeenCalledTimes(1) })
+    const models = api.mutateSettings.mock.calls[0][1]
       .find((op: { path: string[] }) => op.path[0] === 'models').value
     expect(models[0]).toEqual({ id: 'deepseek-chat', contextWindow: 128_000, maxTokens: 8_192, reasoningEfforts: ['low', 'medium', 'high'] })
     expect(models[1]).toEqual({ id: 'qwen/qwen-max', contextWindow: 262_144, maxTokens: 32_768 })
@@ -185,8 +183,8 @@ describe('models.dev params update', () => {
     fireEvent.click(screen.getByText(t('paramsFillBlank')))
     await waitFor(() => { expect(screen.getByText(new RegExp(t('paramsApplied')))).toBeTruthy() })
     fireEvent.click(screen.getByText(t('apply')))
-    await waitFor(() => { expect(api.settings.mutate).toHaveBeenCalledTimes(1) })
-    const models = api.settings.mutate.mock.calls[0][0].ops
+    await waitFor(() => { expect(api.mutateSettings).toHaveBeenCalledTimes(1) })
+    const models = api.mutateSettings.mock.calls[0][1]
       .find((op: { path: string[] }) => op.path[0] === 'models').value
     expect(models[0]).toEqual({ id: 'deepseek-chat', contextWindow: 65_536, maxTokens: 8_192, reasoningEfforts: ['low', 'medium', 'high'] })
   })
@@ -209,8 +207,8 @@ describe('models.dev params update', () => {
 
     fireEvent.click(screen.getByText(t('fetchCancel')))
     fireEvent.click(screen.getByText(t('apply')))
-    await waitFor(() => { expect(api.settings.mutate).toHaveBeenCalledTimes(1) })
-    const proxy = api.settings.mutate.mock.calls[0][0].ops
+    await waitFor(() => { expect(api.mutateSettings).toHaveBeenCalledTimes(1) })
+    const proxy = api.mutateSettings.mock.calls[0][1]
       .find((op: { path: string[] }) => op.path[0] === 'proxy').value
     expect(proxy).toEqual({ enabled: true, url: 'http://127.0.0.1:7897' })
   })
@@ -219,11 +217,9 @@ describe('models.dev params update', () => {
 describe('model catalog', () => {
   it('sorts fetched candidates by id and the adopted rows keep that order', async () => {
     const api = wireFace()
-    api.llm.discoverModels.mockResolvedValueOnce({
-      result: {
-        ok: true,
-        value: { models: [{ id: 'zhipu/glm-5.3' }, { id: 'aa-first' }, { id: 'deepseek-chat' }] },
-      },
+    api.discoverModels.mockResolvedValueOnce({
+      ok: true,
+      value: [{ id: 'zhipu/glm-5.3' }, { id: 'aa-first' }, { id: 'deepseek-chat' }],
     })
     render(<NewApiSection api={api as never} t={t} fetchModelParams={paramsFace() as never} />)
 
@@ -246,7 +242,7 @@ describe('model catalog', () => {
 
   /** The models op of the first mutate call. */
   function savedModels(api: ReturnType<typeof wireFace>): Array<Record<string, unknown>> {
-    return api.settings.mutate.mock.calls[0][0].ops
+    return api.mutateSettings.mock.calls[0][1]
       .find((op: { path: string[] }) => op.path[0] === 'models').value
   }
 
@@ -264,7 +260,7 @@ describe('model catalog', () => {
 
     fireEvent.change(context, { target: { value: '256K' } })
     fireEvent.click(screen.getByText(t('apply')))
-    await waitFor(() => { expect(api.settings.mutate).toHaveBeenCalledTimes(1) })
+    await waitFor(() => { expect(api.mutateSettings).toHaveBeenCalledTimes(1) })
     expect(savedModels(api)[0].contextWindow).toBe(256_000)
   })
 
@@ -276,7 +272,7 @@ describe('model catalog', () => {
     fireEvent.change(name, { target: { value: 'Renamed' } })
     fireEvent.change(name, { target: { value: '' } })
     fireEvent.click(screen.getByText(t('apply')))
-    await waitFor(() => { expect(api.settings.mutate).toHaveBeenCalledTimes(1) })
+    await waitFor(() => { expect(api.mutateSettings).toHaveBeenCalledTimes(1) })
     expect(savedModels(api)[0].name).toBeUndefined()
   })
 
@@ -296,8 +292,8 @@ describe('model catalog', () => {
     // Saving writes the emptied array (the static describe stub still
     // answers the old fixture after reload — irrelevant to the written ops).
     fireEvent.click(screen.getByText(t('apply')))
-    await waitFor(() => { expect(api.settings.mutate).toHaveBeenCalledTimes(1) })
-    const models = api.settings.mutate.mock.calls[0][0].ops
+    await waitFor(() => { expect(api.mutateSettings).toHaveBeenCalledTimes(1) })
+    const models = api.mutateSettings.mock.calls[0][1]
       .find((op: { path: string[] }) => op.path[0] === 'models').value
     expect(models).toEqual([])
   })
@@ -312,6 +308,6 @@ describe('model catalog', () => {
 
     fireEvent.click(screen.getByText(t('apply')))
     await waitFor(() => { expect(screen.getByText(new RegExp(t('modelIdRequired')))).toBeTruthy() })
-    expect(api.settings.mutate).not.toHaveBeenCalled()
+    expect(api.mutateSettings).not.toHaveBeenCalled()
   })
 })

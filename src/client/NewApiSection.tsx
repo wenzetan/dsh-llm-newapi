@@ -14,8 +14,16 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { DiscoveredModelView, IApiClient, SettingsNamespaceView, SettingsPathOpView } from '@deepseek-ai/dsh-client-connection/client'
-import type { NewApiKey } from './locale.ts'
+import type {
+  LlmDiscoveredModel,
+  LlmModelDiscoveryRequest,
+  RemoteResult,
+  SettingsDescribeValue,
+  SettingsNamespaceView,
+  SettingsPathOpView,
+  CredentialInfo,
+} from '@deepseek-ai/dsh-api-remotes/client'
+import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ModelsDevParamsRequest, ModelsDevParamsResponse } from './params-types.ts'
 
 /**
@@ -115,15 +123,41 @@ function IconTrash(): ReactNode {
   )
 }
 
-/** Inject face: the wire face, the bound translate, and the models.dev params call. */
-export interface NewApiSectionProps {
-  api: Pick<IApiClient, 'settings' | 'credentials' | 'llm'>
-  t: (key: NewApiKey) => string
+/** The settings/credentials/llm wire face the apply closure builds over the typert Remote namespaces. */
+export interface NewApiWire {
+  /** Whole-document settings describe (redacted): writability + one view per registered namespace. */
+  describeSettings(): Promise<RemoteResult<SettingsDescribeValue>>
+  /** Path-op write to one namespace, fenced by the revision the draft read. */
+  mutateSettings(
+    ns: string,
+    ops: SettingsPathOpView[],
+    expectedRevision: number | undefined,
+  ): Promise<RemoteResult<SettingsNamespaceView>>
+  /** Credential state for the given references (values never ride the wire). */
+  describeCredentials(refs: string[]): Promise<RemoteResult<Record<string, CredentialInfo>>>
+  /** Store one credential literal under its reference. */
+  setCredential(ref: string, value: string): Promise<RemoteResult<void>>
+  /** Ask this namespace's adapter family what models one endpoint serves. */
+  discoverModels(
+    settingsNs: string,
+    request: LlmModelDiscoveryRequest,
+  ): Promise<RemoteResult<LlmDiscoveredModel[]>>
+}
+
+/** Registration-side inject face: the wire face, the bound translate, and the models.dev params call. */
+export interface NewApiSectionInjected {
+  api: NewApiWire
   /** Host-side models.dev catalog lookup (browser sends ids + proxy only). */
   fetchModelParams: (
     request: ModelsDevParamsRequest,
   ) => Promise<{ ok: true; value: ModelsDevParamsResponse } | { ok: false; error: { message: string } }>
 }
+
+/** Full component props assembled by the settings slot renderer (locale seat + inject face). */
+export type NewApiSectionProps =
+  PropsRuntime<'settings.section'>
+  & PropsLocale<'settings.newapi'>
+  & InjectFace<NewApiSectionInjected>
 
 const NS = 'llm-newapi'
 /** Credential reference the host half resolves per request (see apply.ts). */
@@ -165,7 +199,7 @@ function bufferKey(index: number, field: CapacityField): string {
  * @returns the section.
  */
 export function NewApiSection(props: NewApiSectionProps): ReactNode {
-  const { api, t } = props
+  const { api, t, fetchModelParams } = props
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [errorText, setErrorText] = useState<string | undefined>(undefined)
   const [revision, setRevision] = useState<number>(0)
@@ -186,7 +220,7 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
   const [editing, setEditing] = useState<ReadonlyMap<string, string>>(new Map())
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<string | undefined>(undefined)
-  const [candidates, setCandidates] = useState<readonly DiscoveredModelView[] | undefined>(undefined)
+  const [candidates, setCandidates] = useState<readonly LlmDiscoveredModel[] | undefined>(undefined)
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set())
   /** Proxy draft for the models.dev download; persisted with the section. */
   const [proxyEnabled, setProxyEnabled] = useState(false)
@@ -209,14 +243,14 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
     setStatus('loading')
     setErrorText(undefined)
     try {
-      const described = await api.settings.describe({})
-      if (!described.result.ok) {
-        setErrorText(described.result.error.message)
+      const described = await api.describeSettings()
+      if (!described.ok) {
+        setErrorText(described.error.message)
         setStatus('error')
         return
       }
-      setWritable(described.result.value.writable)
-      const section = described.result.value.namespaces.find((entry: SettingsNamespaceView) => entry.ns === NS)
+      setWritable(described.value.writable)
+      const section = described.value.namespaces.find((entry: SettingsNamespaceView) => entry.ns === NS)
       if (section === undefined) {
         setErrorText(t('nsNotRegistered'))
         setStatus('error')
@@ -231,9 +265,9 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
       if (typeof proxy.url === 'string' && proxy.url.length > 0) setProxyUrl(proxy.url)
       setExpanded(new Set())
       setEditing(new Map())
-      const credential = await api.credentials.describe({ refs: [KEY_REF] })
-      if (credential.result.ok) {
-        const view = credential.result.value.credentials[KEY_REF]
+      const credential = await api.describeCredentials([KEY_REF])
+      if (credential.ok) {
+        const view = credential.value[KEY_REF]
         setKeyConfigured(view?.configured)
         setKeyLocked(view?.writable === false)
       }
@@ -319,17 +353,17 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
           }
         }),
       })
-      const mutated = await api.settings.mutate({ ns: NS, ops, expectedRevision: revision })
-      if (!mutated.result.ok) {
-        setErrorText(mutated.result.error.message)
+      const mutated = await api.mutateSettings(NS, ops, revision)
+      if (!mutated.ok) {
+        setErrorText(mutated.error.message)
         return
       }
-      setRevision(mutated.result.value.revision)
+      setRevision(mutated.value.revision)
       const key = keyDraft.trim()
       if (key.length > 0) {
-        const stored = await api.credentials.set({ ref: KEY_REF, value: key })
-        if (!stored.result.ok) {
-          setErrorText(stored.result.error.message)
+        const stored = await api.setCredential(KEY_REF, key)
+        if (!stored.ok) {
+          setErrorText(stored.error.message)
           return
         }
         setKeyDraft('')
@@ -348,17 +382,16 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
     setCandidates(undefined)
     try {
       const key = keyDraft.trim()
-      const response = await api.llm.discoverModels({
-        settingsNs: NS,
+      const response = await api.discoverModels(NS, {
         provider: 'newapi',
         ...baseURL.trim().length > 0 ? { baseURL: baseURL.trim() } : {},
         ...key.length > 0 ? { apiKey: key } : {},
       })
-      if (!response.result.ok) {
-        setErrorText(response.result.error.message)
+      if (!response.ok) {
+        setErrorText(response.error.message)
         return
       }
-      const found = response.result.value.models
+      const found = response.value
       // Sorted by id regardless of what the host answered, so the picker and
       // the rows it produces read the same way on every fetch.
       found.sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
@@ -425,7 +458,7 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
     setErrorText(undefined)
     setParams(undefined)
     try {
-      const response = await props.fetchModelParams({
+      const response = await fetchModelParams({
         modelIds: ids,
         ...proxyEnabled && proxyUrl.trim().length > 0 ? { proxyUrl: proxyUrl.trim() } : {},
       })

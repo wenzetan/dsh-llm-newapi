@@ -1,8 +1,5 @@
 {
-  "package": "@deepseek-ai/dsh-llm",
-  "version": "0.1.2-alpha.2",
-  "capturedFrom": "npm tarball (@deepseek-ai/dsh-llm@0.1.2-alpha.2, dist-tag alpha); static parse of the `export { … }` statement in lib/index.js (the package cannot be imported standalone: it depends on @deepseek-ai/dsh-util-values)",
-  "note": "Checked-in surface snapshot of the host alpha line for offline compatibility gating (issue #3: CallId was renamed to ToolCallId there). Regenerate for a new host line: npm pack @deepseek-ai/dsh-llm@<version>, then re-parse the export statement.",
+  "version": "0.1.2-rc.1",
   "exports": [
     "APP_IDENTITY",
     "BlockAssembler",

@@ -3,31 +3,37 @@
  * `settings.section` declaration is on the ledger, one settings page of our
  * own. Zero dsh modifications — the section slot is `kind: 'list'`, built for
  * feature-owned pages ("adding a setting never means editing the shell").
+ *
+ * Seam (dsh 0.1.2-rc.1): the browser half mounts as a plain cordis plugin
+ * module (`inject` + `apply(ctx)`); there is no dedicated client-runtime
+ * package anymore, and `ConnectionHandle.api` is gone. Data access rides the
+ * typert Remote namespaces (`ctx.remote.settings` / `.credentials` / `.llm`,
+ * assembled by `@deepseek-ai/dsh-api-remotes`) and the plugin's own host RPC
+ * channel (`ctx.connection.rpc.call`). The section registers through the
+ * settings shell's `settings.section` slot with the locale seat declared, so
+ * the renderer supplies the bound `t`.
  */
-import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
-// Type-only: pulls the ctx.locale Context merge into this program.
+import type { Context as ClientContext } from '@deepseek-ai/cordis'
+// Type-only: pulls the ctx.slots merge into this program.
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
+// Type-only: pulls the ctx.locale merge into this program.
 import type {} from '@deepseek-ai/dsh-client-locale/client'
-// Type-only: pulls the shell's SlotMap merge (the 'settings.section' entry).
+// Type-only: pulls the settings shell's SlotMap merge (the 'settings.section' entry).
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
+// Type-only: pulls the ctx.remote merge into this program.
+import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
 import { NewApiSection } from './NewApiSection.tsx'
-import type { NewApiKey } from './locale.ts'
+import type { NewApiSectionInjected } from './NewApiSection.tsx'
 import { en, zh } from './locale.ts'
 import type { ModelsDevParamsRequest, ModelsDevParamsResponse } from './params-types.ts'
-
-declare module '@deepseek-ai/dsh-client-ui-slots' {
-  interface LocaleNamespaceMap {
-    /** The NewAPI settings section copy. */
-    'settings.newapi': NewApiKey
-  }
-}
 
 /** Copy namespace owned by this plugin. */
 const NS = 'settings.newapi'
 
 /**
- * Section styles. The browser bundle is one JS file (ClientModuleRegistry
- * serves no plugin CSS), so the section injects its rules as a fiber-scoped
+ * Section styles. The browser bundle is one JS file (the module loader serves
+ * no plugin CSS), so the section injects its rules as a fiber-scoped
  * `<style>` element. Every color rides the shell's `--dsw-alias-*` design
  * tokens, which `ui-theme` redefines under `body[data-ds-dark-theme]` — one
  * set of rules renders correctly in both light and dark themes. The recipes
@@ -172,8 +178,11 @@ const SECTION_CSS = `
 .newapi-params-unmatched { color: var(--dsw-alias-label-dimmed); font-size: 12px; padding: 4px 0; }
 `
 
-/** Required services (cordis fiber inject): the section slot, copy, and the wire face. */
-export const inject = ['slots', 'locale', 'connection']
+/** Required services (cordis fiber inject): the slots/locale/connection faces and the host remotes. */
+export const inject = [
+  'slots', 'locale', 'connection',
+  'remote', 'remote.settings', 'remote.credentials', 'remote.llm',
+]
 
 /**
  * Register the NewAPI settings section.
@@ -193,7 +202,7 @@ export function apply(ctx: ClientContext): void {
   }
 
   const connection = ctx.get('connection') as ConnectionHandle
-  const t = ctx.locale.bind(NS) as (key: NewApiKey) => string
+  const t = ctx.locale.bind(NS)
 
   // One plain callback over the plugin's host RPC channel: the browser names
   // the gateway model ids (and the proxy draft) and the host downloads
@@ -203,11 +212,27 @@ export function apply(ctx: ClientContext): void {
       { ok: true; value: ModelsDevParamsResponse } | { ok: false; error: { message: string } }
     >
 
+  // The section's data face over the typert Remote namespaces: reads and
+  // writes the llm-newapi settings section, the fixed credential reference,
+  // and the gateway model interrogation for this namespace.
+  const injected = (): NewApiSectionInjected => ({
+    fetchModelParams,
+    api: {
+      describeSettings: () => ctx.remote.settings.describe(),
+      mutateSettings: (ns, ops, expectedRevision) =>
+        ctx.remote.settings.mutate(ns, ops, expectedRevision),
+      describeCredentials: (refs) => ctx.remote.credentials.describe(refs),
+      setCredential: (ref, value) => ctx.remote.credentials.set(ref, value),
+      discoverModels: (settingsNs, request) => ctx.remote.llm.discoverModels(settingsNs, request),
+    },
+  })
+
   ctx.slots.inject('settings.section', () => ctx.slots.register({
     name: 'settings.section',
     id: 'newapi',
     order: 15,
     label: () => t('nav'),
-    inject: () => ({ api: connection.api, t, fetchModelParams }),
+    locale: NS,
+    inject: injected,
   }, NewApiSection))
 }

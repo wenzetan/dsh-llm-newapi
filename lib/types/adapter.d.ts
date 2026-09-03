@@ -192,11 +192,12 @@ export declare class NewApiAdapter extends LlmAdapter {
      * the settings-namespace discovery the plugin registered. A draft being
      * edited supplies its own base and one-shot credential; otherwise both
      * come from the current connection snapshot.
-     * @param request - the discovery draft (endpoint, protocol, credential, cancellation).
+     * @param request - the discovery draft (endpoint, protocol, credential).
+     * @param signal - caller cancellation, supplied separately by the runtime.
      * @returns the advertised models, deduplicated by the runtime, enriched
      *   with context/maxTokens facts from the configured catalog when ids match.
      */
-    discoverModels(request: LlmModelDiscoveryRequest): Promise<readonly LlmDiscoveredModel[]>;
+    discoverModels(request: LlmModelDiscoveryRequest, signal?: AbortSignal): Promise<readonly LlmDiscoveredModel[]>;
     /**
      * Download the models.dev catalog (optionally through the configured
      * forward proxy) and match every requested gateway id against it, serving

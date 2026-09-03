@@ -1,29 +1,30 @@
 /**
  * Build the browser half into lib/client.js as a closure-factory bundle:
  * `window.__ModuleLoader__.load({ id, factory: (require) => {...} })`, with
- * the loader module table supplying the platform externals (react, cordis,
- * the dsh-client-* shell modules). This mirrors the repository-internal
- * `clientBundle` tsdown preset (packages/client/tsdown.client.ts), which is
- * not published; the format contract lives in ClientModuleRegistry's
- * `/plugins/<id>/client.js` serving and the browser module loader.
+ * the loader module table supplying the platform externals (react + jsx
+ * runtime). This mirrors the repository-internal `clientBundle` tsdown
+ * preset (packages/client/tsdown.client.ts) and the browser module loader
+ * contract (packages/client/modules/src/client/manifest.ts) of the dsh
+ * 0.1.2-rc.1 line.
  */
 import { build } from 'esbuild'
 
 const ID = 'dsh-llm-newapi'
 
-/** Loader module-table specifiers: everything the bundle requires instead of inlining. */
+/**
+ * Loader module-table specifiers: everything the bundle requires instead of
+ * inlining. dsh 0.1.2-rc.1: the browser module table provides the shell seed
+ * words (react, react/jsx-runtime, react-dom, react-dom/client, cordis,
+ * client-store, ui-slots, ui-primitives) — see packages/client/web/src/
+ * platform.ts. The section imports every dsh type face (`.../client`,
+ * `/types`) type-only, so those are erased at bundle time and never become
+ * require calls; only react and the jsx runtime stay as runtime externals.
+ */
 const CLIENT_EXTERNALS = [
   'react',
   'react/jsx-runtime',
   'react-dom',
   'react-dom/client',
-  '@deepseek-ai/cordis',
-  '@deepseek-ai/dsh-client-ui-slots',
-  '@deepseek-ai/dsh-client-web-react',
-  '@deepseek-ai/dsh-client-ui-primitives',
-  '@deepseek-ai/dsh-client-ui-attachment',
-  '@deepseek-ai/dsh-client-schema-form',
-  '@deepseek-ai/dsh-client-runtime/client',
 ]
 
 await build({

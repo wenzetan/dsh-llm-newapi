@@ -11,7 +11,7 @@ An LLM provider plugin that adds **NewAPI** to [DeepSeek Harness](https://github
 
 Design decisions and trade-off analysis live in [DESIGN.md](DESIGN.md); reference implementation: `deepseek-harness/packages/llm/llm-deepseek`.
 
-## Installation (dsh ≥ 0.1.0-rc)
+## Installation (dsh ≥ 0.1.2-rc)
 
 ### Release channels and version selection
 
@@ -71,11 +71,10 @@ After install: a "NewAPI" page appears in the settings panel → fill in the API
 
 | Host line | `@deepseek-ai/dsh-llm` it ships | Loads | Verified by |
 | --- | --- | --- | --- |
-| dsh `0.1.1-rc` (local dev host `0.1.1-rc.2`; workspace build/typecheck target `0.0.1-rc.5`) | `0.1.1-rc.2` / `0.0.1-rc.5` | ✅ | full behavior suites — `npm test` (cordis real-mount smoke: registration, streaming translate, tool-call assembly, settings writes; vitest client) + `npm run typecheck` |
-| dsh `0.1.2-alpha` (npm dist-tag `alpha`) | `0.1.2-alpha.2` | ✅ | `npm run test:host` — export gate (every runtime `@deepseek-ai/dsh-llm` import in the built entry exists on **both** the rc and alpha surfaces) + an offline ESM link fixture that reproduces the issue #3 loader failure against the alpha surface |
+| dsh `0.1.2-rc` (npm `next`; the line this repo builds and typechecks against) | `0.1.2-rc.1` | ✅ | full behavior suites — `npm test` (cordis real-mount smoke against the current seam: registration, streaming translate, tool-call assembly, settings writes through `ctx.settings.installSection`; vitest client against the Remote-namespace wire) + `npm run typecheck` + the export gate below |
 
-- The alpha line renamed the `dsh-llm` export `CallId` → `ToolCallId`; releases up to `0.8.3-rc.1` import it at runtime and their whole loader entry dies at ESM link time on alpha hosts (issue #3). The fix brands tool-call ids locally and imports no branding helper at runtime, so one build loads on both lines.
-- Untested host patches are expected to work when their `dsh-llm` surface matches; the checked-in alpha surface snapshot (`test/fixtures/dsh-llm-alpha-0.1.2-alpha.2.exports.json`, captured from the real npm tarball) is what the gate compares against — regenerate it per new host line.
+- The build targets the current dsh seam (0.1.2-rc.1): `ToolCallId` branding on `dsh-llm`, settings sections installed through the `settings` service, model-discovery cancellation as a separate signal, and the RPC `handle(channel, handler)` without a per-handle authority option. Hosts from the older 0.1.1-rc / 0.0.1-rc lines are **not** supported by this build — the browser half speaks to the Remote-namespace wire those hosts do not expose.
+- `npm run test:host` additionally gates the built entry: every runtime `@deepseek-ai/dsh-llm` import in `lib/index.js` must exist on **both** the workspace-resolved surface and the checked-in host snapshot (`test/fixtures/dsh-llm-0.1.2-rc.1.exports.json`, captured from the real npm package). A host-side rename dies here — at ESM link time in a real boot — instead of on a user's machine; regenerate the snapshot per new host line.
 
 ## Configuration (cordis.yml entry config; after install the `llm-newapi:` section in settings.yaml hot-reloads and overrides it)
 
@@ -117,7 +116,7 @@ After install: a "NewAPI" page appears in the settings panel → fill in the API
 
 ```sh
 npm install && npm run build   # host: tsc types + esbuild → lib/index.js; client: closure-factory → lib/client.js
-npm test                       # vitest client + host-compat gate (rc/alpha export surfaces, issue #3 link fixture) + cordis real-mount smoke
+npm test                       # vitest client + host-compat gate (0.1.2-rc.1 export surfaces + offline link fixture) + cordis real-mount smoke
 npm run cache:models-dev      # cache models.dev/api.json locally to .cache/ (gitignored, for development)
 ```
 
@@ -126,6 +125,8 @@ npm run cache:models-dev      # cache models.dev/api.json locally to .cache/ (gi
 After changing source, re-run `npm run build` and **commit `lib/`** — `github:` installs run from the committed artifacts, and the CI "Committed artifacts are current" step rejects stale outputs.
 
 ## Status
+
+**main (unreleased): dsh 0.1.2-rc.1 adaptation** — the build target and devDependencies moved from the `0.0.1-rc.*`/`0.1.1-rc` npm line to the current dsh seam (`0.1.2-rc.1`, the `next` dist-tag / this source checkout). Host: tool-call ids are branded with `ToolCallId` (type-only; no runtime import), model discovery receives cancellation as a separate `signal` (`LlmModelDiscoveryRequest` no longer carries it), the settings section installs through `ctx.settings.installSection` (settings seam) instead of the removed top-level helpers, `deepEqualJson` moved to `@deepseek-ai/dsh-util-values`, and the RPC channel registers as `handle(channel, handler)` — loopback-only exposure is now the connection service's own fence. Browser: the half mounts as a plain cordis plugin (`inject`/`apply`) with no client-runtime package; data access rides the typert Remote namespaces (`ctx.remote.settings`/`credentials`/`llm`) and the `settings.section` slot now declares its `locale` seat; the client bundle's only runtime externals are react + jsx-runtime (every dsh type face is type-only). `typescript` is now an explicit devDependency so `npm run build`/`typecheck` work from a clean install.
 
 v0.8.3: tool-call id/name delta hardening (#1) — some gateways (glm-5.3 via qcplay) repeat `tool_calls[].id` and `function.name` on every continuation delta as **empty strings** instead of omitting the fields; the presence-only merge overwrote the first delta's real tool name with `''`, so every tool call failed as `unknown tool`. The translator now accepts only non-empty `id`/`name` values (matching the existing non-empty guards on text/reasoning deltas); argument concatenation is unchanged.
 

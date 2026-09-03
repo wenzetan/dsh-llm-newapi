@@ -10,7 +10,7 @@ import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 import { Context, Service } from '@deepseek-ai/cordis'
 import LlmRuntime, { resolveRetryPolicy } from '@deepseek-ai/dsh-llm'
-import SettingsProvider, { settingsNamespace } from '@deepseek-ai/dsh-settings'
+import SettingsProvider from '@deepseek-ai/dsh-settings'
 import * as plugin from '../lib/index.js'
 
 /** In-memory settings provider: the smallest real SettingsProvider subclass. */
@@ -160,12 +160,12 @@ function stubModelsListing() {
   // A schema-valid but unserviceable baseURL rejects at the write, so it can
   // never store and silently pin the adapter to the last good facts.
   await assert.rejects(
-    ctx.settings.update(settingsNamespace('llm-newapi'), { baseURL: 'not-a-url' }),
+    ctx.settings.update('llm-newapi', { baseURL: 'not-a-url' }),
     (error) => error.message.includes('baseURL must be an absolute http(s) URL'),
   )
 
   // A serviceable section commits and the very next discovery uses it.
-  await ctx.settings.update(settingsNamespace('llm-newapi'), { baseURL: 'http://settings-gw:9000/v1' })
+  await ctx.settings.update('llm-newapi', { baseURL: 'http://settings-gw:9000/v1' })
   const { asked, restore } = stubModelsListing()
   try {
     const found = await ctx.llm.discoverModels('llm-newapi', { provider: 'newapi' })
@@ -297,7 +297,7 @@ function stubModelsListing() {
   // The settings write point refuses an enabled proxy with a non-http(s) url.
   await ctx.plugin(MemorySettings, {})
   await assert.rejects(
-    ctx.settings.update(settingsNamespace('llm-newapi'), { proxy: { enabled: true, url: 'ftp://x' } }),
+    ctx.settings.update('llm-newapi', { proxy: { enabled: true, url: 'ftp://x' } }),
     (error) => error.message.includes('proxy.url must be an http(s) URL'),
   )
 }
@@ -315,8 +315,8 @@ function stubModelsListing() {
     constructor(child) { super(child, 'connection') }
     get rpc() {
       return {
-        handle: (channel, handler, options) => {
-          registered.push({ channel, handler, options })
+        handle: (channel, handler) => {
+          registered.push({ channel, handler })
           return () => Promise.resolve()
         },
       }
@@ -324,10 +324,11 @@ function stubModelsListing() {
   }
   await ctx.plugin(FakeConnection)
 
-  // The inject scope ran as soon as the service appeared.
+  // The inject scope ran as soon as the service appeared. Loopback-only
+  // exposure is the connection service's own fence in the 0.1.2-rc.1 line:
+  // channel registration no longer carries a per-handle authority option.
   assert.equal(registered.length, 1)
   assert.equal(registered[0].channel, '/llm-newapi')
-  assert.equal(registered[0].options.authority, 'loopback')
 
   // Unknown endpoints answer the error envelope without any network use.
   const answer = await registered[0].handler('nope', {}, new AbortController().signal)

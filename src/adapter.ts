@@ -477,11 +477,15 @@ export class NewApiAdapter extends LlmAdapter {
    * the settings-namespace discovery the plugin registered. A draft being
    * edited supplies its own base and one-shot credential; otherwise both
    * come from the current connection snapshot.
-   * @param request - the discovery draft (endpoint, protocol, credential, cancellation).
+   * @param request - the discovery draft (endpoint, protocol, credential).
+   * @param signal - caller cancellation, supplied separately by the runtime.
    * @returns the advertised models, deduplicated by the runtime, enriched
    *   with context/maxTokens facts from the configured catalog when ids match.
    */
-  async discoverModels(request: LlmModelDiscoveryRequest): Promise<readonly LlmDiscoveredModel[]> {
+  async discoverModels(
+    request: LlmModelDiscoveryRequest,
+    signal?: AbortSignal,
+  ): Promise<readonly LlmDiscoveredModel[]> {
     const connection = this.config.options()
     const base = request.baseURL !== undefined && request.baseURL.length > 0
       ? normalizeBaseUrl(request.baseURL)
@@ -498,10 +502,10 @@ export class NewApiAdapter extends LlmAdapter {
           'accept': 'application/json',
           ...attributionHeaders(),
         },
-        ...request.signal === undefined ? {} : { signal: request.signal },
+        ...signal === undefined ? {} : { signal },
       })
     } catch (error: unknown) {
-      if (request.signal?.aborted) throw error
+      if (signal?.aborted) throw error
       throw new LlmError(`NewAPI model discovery request to ${base} failed`, 'TRANSPORT', { cause: error })
     }
     if (!response.ok) {

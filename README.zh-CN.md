@@ -11,7 +11,7 @@
 
 设计决策与差异分析见 [DESIGN.md](DESIGN.md)；参考实现 `deepseek-harness/packages/llm/llm-deepseek`。
 
-## 安装（dsh ≥ 0.1.0-rc）
+## 安装（dsh ≥ 0.1.2-rc）
 
 ### 发布通道与版本选择
 
@@ -71,11 +71,10 @@ dsh plugin --profile web add link:$(pwd)
 
 | 宿主线 | 自带 `@deepseek-ai/dsh-llm` | 可装载 | 验证方式 |
 | --- | --- | --- | --- |
-| dsh `0.1.1-rc`（本地开发宿主 `0.1.1-rc.2`；workspace 构建/类型检查目标 `0.0.1-rc.5`） | `0.1.1-rc.2` / `0.0.1-rc.5` | ✅ | 全量行为套件——`npm test`（cordis 实挂载 smoke：注册面、流式 translate、tool-call 组装、settings 写入；vitest 客户端）+ `npm run typecheck` |
-| dsh `0.1.2-alpha`（npm dist-tag `alpha`） | `0.1.2-alpha.2` | ✅ | `npm run test:host`——导出门禁（构建产物对 `@deepseek-ai/dsh-llm` 的每个运行时导入在 rc、alpha **两个**导出面上都存在）+ 离线 ESM 链接 fixture（对 alpha 面复现 issue #3 的装载失败） |
+| dsh `0.1.2-rc`（npm `next`；本仓库构建/类型检查目标） | `0.1.2-rc.1` | ✅ | 全量行为套件——`npm test`（cordis 实挂载 smoke，针对当前 seam：注册面、流式 translate、tool-call 组装、经 `ctx.settings.installSection` 的 settings 写入；vitest 客户端针对 Remote-namespace wire）+ `npm run typecheck` + 下方导出门禁 |
 
-- alpha 线把 `dsh-llm` 的导出 `CallId` 改名为 `ToolCallId`；`0.8.3-rc.1` 及之前的版本在运行时导入它，整个 loader entry 在 alpha 宿主上于 ESM 链接期即死（issue #3）。修复改为本地做 tool-call id 的品牌标注，运行时不再导入任何品牌辅助函数，一份构建同时适配两条线。
-- 未逐点测试的宿主 patch，只要其 `dsh-llm` 导出面一致即预期可用；门禁比对的 alpha 面快照入库于 `test/fixtures/dsh-llm-alpha-0.1.2-alpha.2.exports.json`（取自真实 npm tarball），换宿主线时重新生成。
+- 构建目标为当前 dsh seam（0.1.2-rc.1）：`dsh-llm` 的 `ToolCallId` 品牌标注、settings 段经 `settings` 服务安装、模型发现取消信号独立传参、RPC `handle(channel, handler)` 无 per-handle authority 选项。旧 0.1.1-rc / 0.0.1-rc 宿主线**不**受本构建支持——浏览器半边对话的是这些宿主不暴露的 Remote-namespace wire。
+- `npm run test:host` 另行门禁构建产物：`lib/index.js` 对 `@deepseek-ai/dsh-llm` 的每个运行时导入必须在 **workspace 解析面**与入库宿主快照（`test/fixtures/dsh-llm-0.1.2-rc.1.exports.json`，取自真实 npm 包）**两个**面上都存在。宿主侧改名会在此处（真实启动时的 ESM 链接期）暴露而非等到用户机器上；换宿主线时重新生成该快照。
 
 ## 配置（cordis.yml entry config；装机后 settings.yaml `llm-newapi:` 段热更新覆盖）
 
@@ -117,7 +116,7 @@ dsh plugin --profile web add link:$(pwd)
 
 ```sh
 npm install && npm run build   # host: tsc 类型 + esbuild → lib/index.js；client: closure-factory → lib/client.js
-npm test                       # vitest 客户端 + host-compat 门禁（rc/alpha 导出面、issue #3 链接 fixture）+ cordis 实挂载 smoke
+npm test                       # vitest 客户端 + host-compat 门禁（0.1.2-rc.1 导出面 + 离线链接 fixture）+ cordis 实挂载 smoke
 npm run cache:models-dev      # 本地缓存 models.dev/api.json 到 .cache/（gitignored，开发用）
 ```
 
@@ -126,6 +125,8 @@ npm run cache:models-dev      # 本地缓存 models.dev/api.json 到 .cache/（g
 改源码后须重跑 `npm run build` 并**提交 `lib/`**——`github:` 安装从提交的产物运行，CI 的「Committed artifacts are current」步骤会在产物过期时拒绝。
 
 ## 状态
+
+**main（未发布）：dsh 0.1.2-rc.1 适配** —— 构建目标与 devDependencies 自 `0.0.1-rc.*`/`0.1.1-rc` npm 线迁移至当前 dsh seam（`0.1.2-rc.1`，`next` dist-tag / 本源码检出）。Host：tool-call id 以 `ToolCallId` 品牌标注（仅类型，无运行时导入）；模型发现取消信号独立传参（`LlmModelDiscoveryRequest` 不再携带）；settings 段改经 `ctx.settings.installSection`（settings seam）安装，顶层 helper 已移除；`deepEqualJson` 移至 `@deepseek-ai/dsh-util-values`；RPC 通道以 `handle(channel, handler)` 注册——loopback 专属暴露现由 connection 服务的整体围栏负责。Browser：半边以纯 cordis 插件（`inject`/`apply`）挂载，不再有 client-runtime 包；数据读写走 typert Remote 命名空间（`ctx.remote.settings`/`credentials`/`llm`）；`settings.section` 槽现在声明自己的 `locale` seat；客户端 bundle 的运行时 external 仅剩 react + jsx-runtime（所有 dsh 类型面均为 type-only）。`typescript` 现为显式 devDependency，保证全新安装即可 `npm run build`/`typecheck`。
 
 v0.8.3：tool-call id/name delta 加固（#1）——部分网关（glm-5.3 经 qcplay）在 tool-call 后续 delta 中把 `id`/`function.name` 以**空字符串**重复下发而非省略字段，原先「字段存在即覆盖」的合并把首段收到的真实工具名覆盖为空，所有工具调用统一报 `unknown tool`；翻译层现仅接受非空的 `id`/`name`（与 text/reasoning delta 已有的非空守卫一致），arguments 拼接不变。
 
