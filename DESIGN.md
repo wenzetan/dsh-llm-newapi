@@ -40,6 +40,10 @@ ctx.inject(['settings'], sc => sc.settings.installSection(ctx, NS, Config, confi
 
 `declared: true`：该路由完全由配置声明（网关部署，插件不内置任何模型事实）——正是 `LlmConfigurableProvider.declared` 字段文档描述的场景。
 
+### 2.1 宿主版本门禁
+
+当前 dsh 插件清单没有可强制执行的最低宿主版本字段，profile 又以 `autoInstallPeers: false` 由宿主提供 seam peers，因此 peer 范围只能表达契约、不能形成安装期硬门禁。Host 入口会读取两代均显式导出的 `@deepseek-ai/dsh-llm/package.json`，在模块求值开始时要求版本不低于 `0.1.2-rc.1`，否则抛出包含升级命令的明确错误。`deepEqualJson` 的小型结构比较逻辑保留为本地 helper，而不静态导入旧宿主不存在的 `dsh-util-values`，确保版本错误可达。具名导出漂移仍由 `test/host-compat.mjs` 的 ESM link fixture 独立门禁。npm 的 prerelease range 只自动包含同一 major/minor/patch 元组，故 peer 下界只是当前 seam 的元数据提示，运行时 guard 才是权威拒绝点；迁移至未来 RC 仍须重新跑整套宿主门禁。
+
 ## 3. 与 `llm-deepseek` 的关系：骨架同源，六处实质差异
 
 NewAPI 与 DeepSeek 官方端点同为 OpenAI 兼容 chat-completions + SSE，故 transport 骨架（fetch + eventsource-parser + idleWatchdog、serialize/translate/sse 分层、per-request 连接快照、last-good 设置回退）全部沿用官方实现。实质差异：

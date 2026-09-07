@@ -4,6 +4,7 @@
     "lib": ["ES2023", "DOM", "ESNext.Disposable"],
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
+    "resolveJsonModule": true,
     "rootDir": "src",
     "outDir": "lib/types",
     "declaration": true,

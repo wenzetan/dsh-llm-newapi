@@ -3,5 +3,9 @@ node_modules/
 .selfcheck/
 .cache/
 test/.tmp-host-alpha/
+test/.tmp-host-surface/
+.tmp-host/
 .tmp-alpha/
 .tmp-npm-cache/
+.verify/
+models_api.json

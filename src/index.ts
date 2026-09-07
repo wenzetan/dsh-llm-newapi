@@ -16,12 +16,12 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { assertUsableApiKey, LlmError, resolveRetryPolicy, RetryPolicySchema } from '@deepseek-ai/dsh-llm'
 import type { RetryPolicyConfig } from '@deepseek-ai/dsh-llm'
+import llmManifest from '@deepseek-ai/dsh-llm/package.json' with { type: 'json' }
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
 // Type-only: pulls the cordis Context merge that adds the `settings`
 // service (ctx.settings.installSection) into this program.
 import type {} from '@deepseek-ai/dsh-settings'
-import { deepEqualJson } from '@deepseek-ai/dsh-util-values'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import {
   DEFAULT_CONTEXT_WINDOW,
@@ -49,6 +49,77 @@ export {
 export { serializeRequest } from './serialize.ts'
 export type { NewApiAdapterOptions, NewApiCatalogModel, NewApiConnectionOptions } from './adapter.ts'
 export type * from './types.ts'
+
+const MINIMUM_DSH_VERSION = '0.1.2-rc.1'
+
+type SemverIdentifier = number | string
+interface ParsedSemver {
+  core: [number, number, number]
+  prerelease?: SemverIdentifier[]
+}
+
+function parseSemver(version: string): ParsedSemver | undefined {
+  const match = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/u.exec(version)
+  if (match === null) return undefined
+  const major = Number(match[1])
+  const minor = Number(match[2])
+  const patch = Number(match[3])
+  const prerelease = match[4]?.split('.').map(part => /^\d+$/u.test(part) ? Number(part) : part)
+  return prerelease === undefined ? { core: [major, minor, patch] } : { core: [major, minor, patch], prerelease }
+}
+
+function compareSemver(left: ParsedSemver, right: ParsedSemver): number {
+  const [leftMajor, leftMinor, leftPatch] = left.core
+  const [rightMajor, rightMinor, rightPatch] = right.core
+  for (const difference of [leftMajor - rightMajor, leftMinor - rightMinor, leftPatch - rightPatch]) {
+    if (difference !== 0) return difference
+  }
+  if (left.prerelease === undefined) return right.prerelease === undefined ? 0 : 1
+  if (right.prerelease === undefined) return -1
+  const length = Math.max(left.prerelease.length, right.prerelease.length)
+  for (let index = 0; index < length; index += 1) {
+    const leftPart = left.prerelease[index]
+    const rightPart = right.prerelease[index]
+    if (leftPart === undefined) return rightPart === undefined ? 0 : -1
+    if (rightPart === undefined) return 1
+    if (leftPart === rightPart) continue
+    if (typeof leftPart === 'number' && typeof rightPart === 'number') return leftPart - rightPart
+    if (typeof leftPart === 'number') return -1
+    if (typeof rightPart === 'number') return 1
+    return leftPart < rightPart ? -1 : 1
+  }
+  return 0
+}
+
+function isSupportedHostVersion(version: string): boolean {
+  const actual = parseSemver(version)
+  const minimum = parseSemver(MINIMUM_DSH_VERSION)
+  return actual !== undefined && minimum !== undefined && compareSemver(actual, minimum) >= 0
+}
+
+const hostLlmVersion = typeof llmManifest.version === 'string' ? llmManifest.version : 'unknown'
+if (!isSupportedHostVersion(hostLlmVersion)) {
+  throw new Error(
+    `dsh-llm-newapi requires dsh >= ${MINIMUM_DSH_VERSION} ` +
+    `(host ships @deepseek-ai/dsh-llm ${hostLlmVersion}); ` +
+    'upgrade the host: npm install -g @deepseek-ai/dsh@next',
+  )
+}
+
+/** Compare JSON-compatible values structurally without requiring a new host package. */
+function deepEqualJson(left: unknown, right: unknown): boolean {
+  if (left === right) return true
+  if (typeof left !== 'object' || typeof right !== 'object' || left === null || right === null) return false
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) return false
+    return left.every((entry, index) => deepEqualJson(entry, right[index]))
+  }
+  const leftRecord = left as Record<string, unknown>
+  const rightRecord = right as Record<string, unknown>
+  const keys = Object.keys(leftRecord)
+  if (keys.length !== Object.keys(rightRecord).length) return false
+  return keys.every(key => key in rightRecord && deepEqualJson(leftRecord[key], rightRecord[key]))
+}
 
 export const name = 'llm-newapi'
 export const inject = ['llm']
