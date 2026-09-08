@@ -4,6 +4,22 @@
 
 An LLM provider plugin that adds **NewAPI** to [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh). **Zero modifications to dsh itself.**
 
+## Version compatibility — read this first
+
+| Verified dsh host | Compatible plugin | Install command | npm channel at this release |
+|---|---|---|---|
+| `0.1.2-rc.1` | `0.8.6-rc.1` | `dsh plugin --profile web add dsh-llm-newapi@0.8.6-rc.1` | `next` |
+| `0.1.1-rc.2` | `0.8.4` | `dsh plugin --profile web add dsh-llm-newapi@0.8.4` | `latest` |
+
+> **Hard compatibility boundary:** `dsh-llm-newapi@0.8.6-rc.1` requires `dsh >= 0.1.2-rc.1` and deliberately rejects the older 0.1.1 seam at startup with an upgrade message. Upgrade dsh first, then the plugin. Existing `llm-newapi` settings and credential references are preserved.
+
+Check the installed pair before starting dsh web:
+
+```sh
+dsh --version
+dsh plugin --profile web list dsh-llm-newapi
+```
+
 - Provider route id: `newapi`
 - Display name: `NewAPI`
 - Shape: LLM Provider plugin — implements the `LlmAdapter` seam from `@deepseek-ai/dsh-llm`; NewAPI is an OpenAI-compatible gateway (`POST {baseURL}/chat/completions`, `GET {baseURL}/models`, baseURL includes `/v1`)

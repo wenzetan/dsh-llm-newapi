@@ -4,6 +4,22 @@
 
 为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（dsh）增加 LLM 供应商 **NewAPI** 的插件。**零 dsh 修改**。
 
+## 版本兼容关系——请先阅读
+
+| 已验证 dsh 宿主 | 兼容插件版本 | 安装命令 | 本次发布对应的 npm 通道 |
+|---|---|---|---|
+| `0.1.2-rc.1` | `0.8.6-rc.1` | `dsh plugin --profile web add dsh-llm-newapi@0.8.6-rc.1` | `next` |
+| `0.1.1-rc.2` | `0.8.4` | `dsh plugin --profile web add dsh-llm-newapi@0.8.4` | `latest` |
+
+> **硬兼容边界：**`dsh-llm-newapi@0.8.6-rc.1` 要求 `dsh >= 0.1.2-rc.1`；在旧 0.1.1 seam 上会主动停止并给出升级提示。请先升级 dsh，再升级插件。现有 `llm-newapi` 设置和凭据引用不会丢失。
+
+启动 dsh web 前可检查实际安装组合：
+
+```sh
+dsh --version
+dsh plugin --profile web list dsh-llm-newapi
+```
+
 - 供应商 route id：`newapi`
 - 显示名称：`NewAPI`
 - 形态：LLM Provider 插件——实现 `@deepseek-ai/dsh-llm` 的 `LlmAdapter` seam；NewAPI 为 OpenAI 兼容网关（`POST {baseURL}/chat/completions`、`GET {baseURL}/models`，baseURL 含 `/v1`）
