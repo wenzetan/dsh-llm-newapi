@@ -449,7 +449,7 @@ export function apply(ctx: Context, config: Config): void {
   // Model discovery for the settings namespace this plugin owns: the Models
   // page interrogates the gateway's /models with the draft's endpoint and
   // one-shot credential, or the current snapshot's facts. The runtime hands
-  // caller cancellation as a separate signal (0.1.5-rc.1 seam).
+  // caller cancellation as a separate signal (0.1.5 seam).
   ctx.llm.registerModelDiscovery(NS, (request, signal) => adapter.discoverModels(request, signal))
 
   // Host-side endpoint for the「更新模型信息」action: the browser names
@@ -491,7 +491,7 @@ export function apply(ctx: Context, config: Config): void {
   })
 
   // The settings section installs through the `settings` service seam
-  // (0.1.5-rc.1): the consumer registers while the provider is present and
+  // (0.1.5 seam): the consumer registers while the provider is present and
   // falls back to the composition entry when it detaches, exactly the
   // layering the old top-level installSettingsSection helper provided.
   ctx.inject(['settings'], (settingsCtx) => {

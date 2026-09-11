@@ -46,7 +46,7 @@ dsh plugin --profile web add --save-exact dsh-llm-newapi@0.8.4
 
 ```sh
 npm view dsh-llm-newapi@0.8.6-rc.2 version
-npm install -g @deepseek-ai/dsh@0.1.5-rc.1
+npm install -g @deepseek-ai/dsh@0.1.5-rc.2
 npm install -g pnpm
 dsh plugin --profile web add --save-exact dsh-llm-newapi@0.8.6-rc.2
 ```
@@ -55,7 +55,7 @@ dsh plugin --profile web add --save-exact dsh-llm-newapi@0.8.6-rc.2
 
 检查 `$DSH_HOME/profiles/web/package.json`；未设置 `DSH_HOME` 时，默认在用户目录的 `.dsh/profiles/web/package.json`。
 
-在 `dsh.profile.bundles` 数组中确认包含 `dsh-llm-newapi`。新版 dsh `0.1.5-rc.1` 会自动登记声明了 bundle 的插件；旧版或已有 profile 若缺少该项，手动追加一次，保留其他项。以下只是需要检查的 JSON 片段，**不要覆盖整个文件**：
+在 `dsh.profile.bundles` 数组中确认包含 `dsh-llm-newapi`。新版 dsh `0.1.5` 会自动登记声明了 bundle 的插件；旧版或已有 profile 若缺少该项，手动追加一次，保留其他项。以下只是需要检查的 JSON 片段，**不要覆盖整个文件**：
 
 ```json
 {

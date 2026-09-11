@@ -1,13 +1,13 @@
 /**
  * Host-line compatibility gate for the built plugin.
  *
- * The plugin builds and typechecks against the dsh 0.1.5-rc.1 seam
- * (`@deepseek-ai/dsh-llm` 0.1.5-rc.1). A static named runtime import of a
+ * The plugin builds and typechecks against the dsh 0.1.5 seam
+ * (`@deepseek-ai/dsh-llm` 0.1.5 line). A static named runtime import of a
  * symbol the HOST's dsh-llm does not export makes the whole `llm-newapi`
  * loader entry die at ESM link time (`SyntaxError: … does not provide an
  * export named 'X'`) — before any provider code runs. This gate pins that
  * contract: the built entry may only import dsh-llm symbols that exist on
- * the workspace-resolved surface AND on the checked-in 0.1.5-rc.1 surface
+ * the workspace-resolved surface AND on the checked-in 0.1.5-line surface
  * snapshot (captured from the published package), so a rename on either side
  * is caught here instead of in a booting host.
  *

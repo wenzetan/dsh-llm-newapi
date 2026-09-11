@@ -46,7 +46,7 @@ Choose one pair. `--save-exact` records an exact plugin dependency so a later de
 
 ```sh
 npm view dsh-llm-newapi@0.8.6-rc.2 version
-npm install -g @deepseek-ai/dsh@0.1.5-rc.1
+npm install -g @deepseek-ai/dsh@0.1.5-rc.2
 npm install -g pnpm
 dsh plugin --profile web add --save-exact dsh-llm-newapi@0.8.6-rc.2
 ```
@@ -55,7 +55,7 @@ dsh plugin --profile web add --save-exact dsh-llm-newapi@0.8.6-rc.2
 
 Open `$DSH_HOME/profiles/web/package.json`. With no `DSH_HOME` override, this is `.dsh/profiles/web/package.json` under your home directory.
 
-Ensure `dsh.profile.bundles` contains `dsh-llm-newapi`. Host `0.1.5-rc.1` registers installed bundle plugins automatically. On an older host or an existing profile where the entry is missing, append it once and preserve the other entries. This is a JSON fragment to check, **not a replacement for the entire file**:
+Ensure `dsh.profile.bundles` contains `dsh-llm-newapi`. Host `0.1.5` registers installed bundle plugins automatically. On an older host or an existing profile where the entry is missing, append it once and preserve the other entries. This is a JSON fragment to check, **not a replacement for the entire file**:
 
 ```json
 {

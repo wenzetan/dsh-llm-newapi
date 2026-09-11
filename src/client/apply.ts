@@ -4,7 +4,7 @@
  * own. Zero dsh modifications — the section slot is `kind: 'list'`, built for
  * feature-owned pages ("adding a setting never means editing the shell").
  *
- * Seam (dsh 0.1.5-rc.1): the browser half mounts as a plain cordis plugin
+ * Seam (dsh 0.1.5): the browser half mounts as a plain cordis plugin
  * module (`inject` + `apply(ctx)`); there is no dedicated client-runtime
  * package anymore, and `ConnectionHandle.api` is gone. Data access rides the
  * typert Remote namespaces (`ctx.remote.settings` / `.credentials` / `.llm`,

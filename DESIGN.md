@@ -2,7 +2,7 @@
 
 [中文使用指南](README.zh-CN.md) · [配置参考](docs/configuration.md) · [开发与发布](docs/development.md)
 
-本文描述当前代码，不作为历史开发日志。当前代码、构建依赖和 CI 均固定在 dsh `0.1.5-rc.1`，只支持该宿主线；旧宿主行为与后续验证见[适配评估](docs/2026-09-10-dsh-0.1.5-rc.1-assessment.md)。
+本文描述当前代码，不作为历史开发日志。当前代码、构建依赖和 CI 均针对 dsh `0.1.5-rc.2`，只支持 0.1.5 这条宿主线（下限 `0.1.5-rc.1`）；旧宿主行为与后续验证见[适配评估](docs/2026-09-10-dsh-0.1.5-rc.1-assessment.md)。
 
 ## 插件负责什么
 
@@ -74,7 +74,7 @@
 
 类型声明由 TypeScript 生成，构建脚本会修正声明中的相对扩展名。JS、source map 和类型声明都提交至 `lib/`。测试范围和产物检查见[开发指南](docs/development.md)。
 
-当前依赖配置保留了四项 overrides，把 `dsh-type-meta`、`dsh-compact`、`dsh-paths`、`dsh-user-interaction` 别名到 `dsh-brand@0.1.5-rc.1`。这四个名字在上游 0.1.5-rc.1 仍返回 E404；但当前解析树并没有请求它们（`package-lock.json` 与 `node_modules` 中均无对应条目），因此这些别名目前是**防御性配置而非必需项**。它们只在某个依赖真的重新请求这些名字时才生效；升级宿主依赖时应逐项核查，不要沿用「仍然必需」的说法。
+当前依赖配置保留了四项 overrides，把 `dsh-type-meta`、`dsh-compact`、`dsh-paths`、`dsh-user-interaction` 别名到 `dsh-brand@0.1.5-rc.2`。这四个名字在上游 0.1.5 线仍返回 E404；但当前解析树并没有请求它们（`package-lock.json` 与 `node_modules` 中均无对应条目），因此这些别名目前是**防御性配置而非必需项**。它们只在某个依赖真的重新请求这些名字时才生效；升级宿主依赖时应逐项核查，不要沿用「仍然必需」的说法。
 
 ## 版本兼容的边界
 
