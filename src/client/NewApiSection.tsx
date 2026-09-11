@@ -447,6 +447,28 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
     })
   }
 
+  // The picker's master box is a shortcut for clicking every row: it is fully
+  // checked when the whole fetched list is picked and partial otherwise.
+  // Rows that are already configured participate like any other — they stay
+  // out of the initial selection, but ticking them is harmless because
+  // `adopt` skips ids the form already holds.
+  const allPicked = candidates !== undefined && candidates.length > 0
+    && candidates.every(model => picked.has(model.id))
+  const somePicked = candidates !== undefined && candidates.some(model => picked.has(model.id))
+
+  /** Match every row to the master box: pick all when not all are picked, else clear. */
+  const toggleAll = (): void => {
+    if (candidates === undefined) return
+    setPicked(allPicked ? new Set() : new Set(candidates.map(model => model.id)))
+  }
+
+  // `indeterminate` is a DOM property with no JSX equivalent, so it is synced
+  // onto the node after each render.
+  const selectAllRef = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (selectAllRef.current !== null) selectAllRef.current.indeterminate = somePicked && !allPicked
+  }, [somePicked, allPicked])
+
   /** Ask the host (via the RPC face) what models.dev knows about the rows. */
   const updateParams = async (): Promise<void> => {
     const ids = models.map(model => textOf(model, 'id').trim()).filter(id => id.length > 0)
@@ -764,7 +786,18 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
 
       {candidates === undefined ? null : (
         <div className="newapi-candidates">
-          <strong>{t('fetchTitle')}</strong>
+          <div className="newapi-candidates-head">
+            <strong>{t('fetchTitle')}</strong>
+            <label>
+              <input
+                ref={selectAllRef} type="checkbox" checked={allPicked}
+                aria-label={t('fetchSelectAll')}
+                onChange={toggleAll}
+              />
+              {' '}
+              {t('fetchSelectAll')}
+            </label>
+          </div>
           <ul>
             {candidates.map(model => (
               <li key={model.id}>

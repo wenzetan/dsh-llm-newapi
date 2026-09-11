@@ -136,6 +136,8 @@ const SECTION_CSS = `
 .newapi-addmodel:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); }
 .newapi-addmodel:disabled { opacity: 0.4; cursor: default; }
 .newapi-candidates { border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; padding: 12px; margin-bottom: 12px; }
+.newapi-candidates-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.newapi-candidates-head label { display: inline-flex; align-items: center; gap: 6px; color: var(--dsw-alias-label-primary); }
 .newapi-candidates ul { list-style: none; padding: 0; margin: 8px 0; }
 /* Proxy control + models.dev params panel. */
 .newapi-proxyrow {

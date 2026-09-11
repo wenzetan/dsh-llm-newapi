@@ -321,3 +321,72 @@ describe('model catalog', () => {
     expect(api.mutateSettings).not.toHaveBeenCalled()
   })
 })
+
+describe('select-all in the fetched-model picker', () => {
+  /** Open the picker over a fixed candidate list and hand back the wire face. */
+  async function openPicker(ids: readonly string[]) {
+    const api = wireFace()
+    api.discoverModels.mockResolvedValueOnce({ ok: true, value: ids.map(id => ({ id })) })
+    render(<NewApiSection api={api as never} t={t} fetchModelParams={paramsFace() as never} />)
+    await waitFor(() => { expect(screen.getByText(t('fetchModels'))).toBeTruthy() })
+    fireEvent.click(screen.getByText(t('fetchModels')))
+    await waitFor(() => { expect(screen.getByText(t('fetchAdopt'))).toBeTruthy() })
+    return api
+  }
+
+  const master = () => screen.getByLabelText(t('fetchSelectAll')) as HTMLInputElement
+  const row = (id: string) => screen.getByLabelText(id) as HTMLInputElement
+
+  it('clears every candidate and restores them on the next toggle', async () => {
+    await openPicker(['alpha', 'beta', 'gamma'])
+
+    // Nothing is configured yet, so every fetched candidate starts picked.
+    expect(master().checked).toBe(true)
+    expect(row('alpha').checked).toBe(true)
+
+    fireEvent.click(master())
+    for (const id of ['alpha', 'beta', 'gamma']) expect(row(id).checked).toBe(false)
+    expect(master().checked).toBe(false)
+
+    fireEvent.click(master())
+    for (const id of ['alpha', 'beta', 'gamma']) expect(row(id).checked).toBe(true)
+    expect(master().checked).toBe(true)
+  })
+
+  it('reports the partial state while only some candidates are picked', async () => {
+    await openPicker(['alpha', 'beta', 'gamma'])
+
+    fireEvent.click(row('beta'))
+    expect(master().checked).toBe(false)
+    expect(master().indeterminate).toBe(true)
+
+    fireEvent.click(row('beta'))
+    expect(master().checked).toBe(true)
+    expect(master().indeterminate).toBe(false)
+  })
+
+  it('selects the candidates that are already configured without rewriting them', async () => {
+    // The fixture already holds deepseek-chat with a hand-tuned capacity, so
+    // that candidate starts unpicked and is the one a plain select-all used to
+    // miss.
+    const api = await openPicker(['deepseek-chat', 'alpha'])
+    expect(row('deepseek-chat').checked).toBe(false)
+    expect(row('alpha').checked).toBe(true)
+
+    fireEvent.click(master())
+    expect(row('deepseek-chat').checked).toBe(true)
+    expect(master().checked).toBe(true)
+
+    fireEvent.click(screen.getByText(t('fetchAdopt')))
+    // Adopt only edits the form; the write happens on save.
+    fireEvent.click(screen.getByText(t('apply')))
+    await waitFor(() => { expect(api.mutateSettings).toHaveBeenCalledTimes(1) })
+    const saved = api.mutateSettings.mock.calls[0][1]
+      .find((op: { path: string[] }) => op.path[0] === 'models').value as Array<Record<string, unknown>>
+    // Selecting an existing row is still a no-op at adopt time: the row is not
+    // duplicated and the tuned capacity survives.
+    expect(saved.filter(model => model.id === 'deepseek-chat')).toHaveLength(1)
+    expect(saved.find(model => model.id === 'deepseek-chat')?.contextWindow).toBe(65536)
+    expect(saved.map(model => model.id)).toContain('alpha')
+  })
+})
