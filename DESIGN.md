@@ -43,6 +43,8 @@
 
 插件加载时注册供应商、适配器和模型发现处理器。settings 或 connection 服务稍后就绪时，通过 `ctx.inject` 安装设置段与 RPC，避免因加载顺序而漏注册。注册和样式等资源随对应的 Cordis 作用域释放。
 
+自有 RPC 通道的注册方式需要单独说明：0.1.5 宿主线上 `connection.rpc.handle(channel, handler)` 不可用。它的 `rpc` getter 捕获 `this.ctx`，而该上下文是 connection 服务自身的作用域，没有注入 `webServer`；`handle` 内部最终求值 `owner.webServer.register(route)`，cordis 抛出 `cannot get property "webServer" without inject`，异常又被 effect 吞掉，于是通道静默缺失，浏览器只能撞上 SPA fallback 的 405。插件改为注入 `connection` 与 `webServer`，并把自身作用域作为 owner 传给 connection 服务上的 `register(owner, channel, handler)`——也就是 `rpc.handle` 实际委托的那个方法。上游没有任何插件调用 `rpc.handle`；`dsh-api-gateway` 对需要 `webServer` 的工作同样注入这一对服务。这一契约由 CI 的真实启动检查守护，单元测试的替身无法复现该守卫。
+
 每次请求读取一次连接配置快照，并据此解析密钥。配置热更新不会改变正在进行的请求。设置写入时先校验；异常快照不能覆盖最后一次可用配置。重试策略是在注册时读取的，所以修改它时通过 `registration.replace` 更新，避免短暂移除模型路由。
 
 密钥使用固定引用 `newapi`，不将 `NEWAPI_API_KEY` 作为回退来源。缺少密钥时插件仍能加载设置页，实际请求会报 `MISSING_CREDENTIAL`。浏览器不读取明文密钥。

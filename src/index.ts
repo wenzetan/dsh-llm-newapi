@@ -456,13 +456,37 @@ export function apply(ctx: Context, config: Config): void {
   // the gateway model ids (and optionally the proxy draft) and the host
   // downloads https://models.dev/api.json — no cross-origin fetch happens in
   // the browser, and a plain HTTP forward proxy works because Node performs
-  // the request. Registered through ctx.inject so it waits for the connection
-  // service and re-runs if that service reloads — an eager ctx.get here read
-  // undefined while the web app had not started the service yet, silently
-  // skipping the route (the browser then met the SPA fallback's 405).
-  ctx.inject(['connection'], (cctx) => {
+  // the request.
+  //
+  // The channel goes through the connection service's own `register(owner,
+  // channel, handler)` rather than the `rpc.handle(channel, handler)` the
+  // type advertises. On the 0.1.5 host line `handle` is unusable: its `rpc`
+  // getter captures `this.ctx`, and that captured context is the connection
+  // service's own scope, which has no `webServer` injected. `register` then
+  // evaluates `owner.webServer.register(route)`, cordis answers
+  // `cannot get property "webServer" without inject`, and the throw is
+  // swallowed by the effect — so the channel silently never appears and the
+  // browser meets the SPA fallback's 405 (the boot check catches exactly
+  // this). Passing our own inject-scope context as the owner fixes it, and
+  // `register` is the very method `rpc.handle` delegates to. No upstream
+  // plugin calls `rpc.handle`; `dsh-api-gateway` injects this same
+  // `connection` + `webServer` pair for the work that does touch `webServer`.
+  //
+  // Both services are injected so registration waits for each to exist and
+  // re-runs if either reloads.
+  ctx.inject(['connection', 'webServer'], (cctx) => {
     const connection = cctx.get('connection') as HostConnectionHandle
-    cctx.effect(() => connection.rpc.handle(
+    // The owner-taking overload is on the service prototype but not on
+    // `HostConnectionHandle`, so the extra shape is declared here.
+    const registrar = connection as unknown as {
+      register(
+        owner: unknown,
+        channel: string,
+        handler: (endpoint: string, payload: unknown, signal: AbortSignal) => Promise<unknown>,
+      ): () => Promise<void>
+    }
+    cctx.effect(() => registrar.register(
+      cctx,
       '/llm-newapi',
       (endpoint: string, payload: unknown, signal: AbortSignal) => {
         if (endpoint !== 'models-dev-params') {
