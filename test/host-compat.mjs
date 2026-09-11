@@ -36,7 +36,7 @@ import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const BUILT_ENTRY = join(ROOT, 'lib', 'index.js')
@@ -148,7 +148,7 @@ function parseExportStatement(path) {
     // A fresh child process is required: an ESM link failure in this process
     // would poison every later import of the same graph.
     stdout = execFileSync(child, ['-e',
-      `import(${JSON.stringify(entry)}).then(m => console.log('PLUGIN-LINK-OK', Object.keys(m).length)).catch(e => { console.error(e.constructor.name + ': ' + e.message); process.exit(1) })`,
+      `import(${JSON.stringify(pathToFileURL(entry).href)}).then(m => console.log('PLUGIN-LINK-OK', Object.keys(m).length)).catch(e => { console.error(e.constructor.name + ': ' + e.message); process.exit(1) })`,
     ], { encoding: 'utf8', timeout: 60_000 })
   } catch (error) {
     const detail = (error.stdout ?? '') + (error.stderr ?? '')
@@ -194,7 +194,7 @@ function parseExportStatement(path) {
   cpSync(join(ROOT, 'lib'), join(pluginDir, 'lib'), { recursive: true })
 
   const result = spawnSync(process.execPath, ['-e',
-    `import(${JSON.stringify(join(pluginDir, 'lib', 'index.js'))}).catch(error => { console.error(error.constructor.name + ': ' + error.message); process.exit(1) })`,
+    `import(${JSON.stringify(pathToFileURL(join(pluginDir, 'lib', 'index.js')).href)}).catch(error => { console.error(error.constructor.name + ': ' + error.message); process.exit(1) })`,
   ], { encoding: 'utf8', timeout: 60_000 })
   const detail = `${result.stdout ?? ''}${result.stderr ?? ''}`
   assert.notEqual(result.status, 0, 'an unsupported dsh 0.1.1 host must reject this plugin')

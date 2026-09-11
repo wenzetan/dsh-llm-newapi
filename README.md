@@ -2,184 +2,126 @@
 
 **English** | [中文](README.zh-CN.md)
 
-An LLM provider plugin that adds **NewAPI** to [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh). **Zero modifications to dsh itself.**
+Use your NewAPI gateway in [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh). The plugin adds a **NewAPI settings page** for credentials, model discovery and model parameters, plus streaming text and tool calls. It requires no changes to dsh.
 
-## Version compatibility — read this first
+## Choose a compatible version
 
-| Verified dsh host | Compatible plugin | Install command | npm channel at this release |
-|---|---|---|---|
-| `0.1.2-rc.1` | `0.8.6-rc.1` | `dsh plugin --profile web add dsh-llm-newapi@0.8.6-rc.1` | `next` |
-| `0.1.1-rc.2` | `0.8.4` | `dsh plugin --profile web add dsh-llm-newapi@0.8.4` | `latest` |
+**Install the host and plugin as a pair.** Status checked on September 10, 2026; the planned release is listed separately from available releases.
 
-> **Hard compatibility boundary:** `dsh-llm-newapi@0.8.6-rc.1` requires `dsh >= 0.1.2-rc.1` and deliberately rejects the older 0.1.1 seam at startup with an upgrade message. Upgrade dsh first, then the plugin. Existing `llm-newapi` settings and credential references are preserved.
+| dsh host | Plugin | Status |
+| --- | --- | --- |
+| `0.1.1-rc.2` | `0.8.4` | Published; plugin npm `latest` |
+| `0.1.2-rc.1` | `0.8.6-rc.1` | Published; plugin npm `next` |
+| `0.1.5-rc.1` | **`0.8.6-rc.2`** | **Planned RC, not published**; isolated tests of the current source pass, full installation and Web validation remain pending |
 
-Check the installed pair before starting dsh web:
+Plugin `0.8.6-rc.1` rejects the older `0.1.1` host. The isolated results for `0.1.5-rc.1` do not certify an existing plugin release for that host. See the [compatibility assessment (Chinese)](docs/2026-09-10-dsh-0.1.5-rc.1-assessment.md).
+
+The next release will remain **`0.8.6-rc.2`**, published to npm `next` and marked Pre-release on GitHub. It will not promote a stable version or move the plugin's `latest` tag. The host and plugin have separate release channels; their respective `latest` versions are not necessarily compatible.
+
+## Install exact versions
+
+You need Node.js, npm and pnpm. Repository CI uses Node.js 24. Install the host with npm, then install the plugin from the npm registry into dsh's `web` profile.
+
+### Published RC pair
+
+```sh
+npm install -g @deepseek-ai/dsh@0.1.2-rc.1
+npm install -g pnpm
+dsh plugin --profile web add --save-exact dsh-llm-newapi@0.8.6-rc.1
+```
+
+### Pair for the older host
+
+```sh
+npm install -g @deepseek-ai/dsh@0.1.1-rc.2
+npm install -g pnpm
+dsh plugin --profile web add --save-exact dsh-llm-newapi@0.8.4
+```
+
+Choose one pair. `--save-exact` records an exact plugin dependency so a later dependency update does not switch versions automatically. Use `dsh plugin` to manage the profile; installing `dsh-llm-newapi` globally by itself does not register it there.
+
+### New host pair: run only after rc.2 is published
+
+**rc.2 is not available yet.** These are the planned commands. Check that the version exists before installing:
+
+```sh
+npm view dsh-llm-newapi@0.8.6-rc.2 version
+npm install -g @deepseek-ai/dsh@0.1.5-rc.1
+npm install -g pnpm
+dsh plugin --profile web add --save-exact dsh-llm-newapi@0.8.6-rc.2
+```
+
+### Check that the plugin is enabled
+
+Open `$DSH_HOME/profiles/web/package.json`. With no `DSH_HOME` override, this is `.dsh/profiles/web/package.json` under your home directory.
+
+Ensure `dsh.profile.bundles` contains `dsh-llm-newapi`. Host `0.1.5-rc.1` registers installed bundle plugins automatically. On an older host or an existing profile where the entry is missing, append it once and preserve the other entries. This is a JSON fragment to check, **not a replacement for the entire file**:
+
+```json
+{
+  "dsh": {
+    "profile": {
+      "bundles": [
+        "@deepseek-ai/dsh-base",
+        "@deepseek-ai/dsh-web-app",
+        "dsh-llm-newapi"
+      ]
+    }
+  }
+}
+```
+
+Check the installed versions, then restart dsh Web:
 
 ```sh
 dsh --version
 dsh plugin --profile web list dsh-llm-newapi
+dsh web
 ```
 
-- Provider route id: `newapi`
-- Display name: `NewAPI`
-- Shape: LLM Provider plugin — implements the `LlmAdapter` seam from `@deepseek-ai/dsh-llm`; NewAPI is an OpenAI-compatible gateway (`POST {baseURL}/chat/completions`, `GET {baseURL}/models`, baseURL includes `/v1`)
-- Dual-face structure: host side (adapter + model discovery) + browser side (a "NewAPI" settings page in the dsh web settings panel, including "Fetch model info")
+## First use
 
-Design decisions and trade-off analysis live in [DESIGN.md](DESIGN.md); reference implementation: `deepseek-harness/packages/llm/llm-deepseek`.
+1. Open **NewAPI** in dsh Web settings.
+2. Enter your gateway URL, such as `https://your-gateway.example/v1`, and API key. Include `/v1`; do not enter the full `/chat/completions` path.
+3. Click **Fetch models**, select the models you need and add the selected entries.
+4. Optionally fetch model information from models.dev. Review context limits, output limits and reasoning efforts before applying values.
+5. Click **Save**, then choose a model under the `newapi` provider in the conversation model picker.
 
-## Installation (dsh ≥ 0.1.2-rc.1)
+Model discovery queries your gateway for available models. models.dev is a public parameter catalog; a match does not establish that your gateway supports a model or feature. Save after applying catalog values.
 
-### Release channels and version selection
+## Capabilities and limits
 
-The project uses a **dual release channel**. Install from the **npm registry** (default) or a **versioned tag**; never from the `main` branch HEAD:
+| Feature | Behavior |
+| --- | --- |
+| Text, reasoning content and tool calls | Streaming supported; an explicit reasoning effort is sent as `reasoning_effort` |
+| Image input | The adapter currently declares text-only input |
+| Model discovery | Queries `/models` and filters names containing `embed`, `rerank` or `ranker`; this is not a capability probe |
+| Model parameters | Edit manually or match against models.dev; verify against your gateway |
+| API key | Saved through settings, never echoed; a blank input preserves the stored key |
+| Multiple gateways | One `newapi` route and one gateway configuration are currently supported |
 
-| Channel | Version shape | Install reference | When to use |
-|---|---|---|---|
-| **Stable (recommended)** | `vX.Y.Z` | `dsh plugin --profile web add dsh-llm-newapi` (npm `latest`) or `github:wenzetan/dsh-llm-newapi#latest` | Daily use; passed all gates and promoted after manual confirmation |
-| **Prerelease** | `vX.Y.Z-rc.N` etc. | `dsh plugin --profile web add dsh-llm-newapi@next` or `github:wenzetan/dsh-llm-newapi#v0.8.2-rc.3` | Trying out / validating new features; not manually confirmed, published only as GitHub Pre-release and npm `next` |
-| **main branch HEAD (not recommended)** | no tag | `github:wenzetan/dsh-llm-newapi` | Development preview; untagged commits have not gone through release verification and may be unstable |
+## Upgrading and troubleshooting
 
-> 💡 The npm `latest` dist-tag (and the GitHub `latest` tag) always points at the newest **manually confirmed** stable version, so the default install command never goes stale and this README does not need per-release updates. Pin an exact `#vX.Y.Z` only when you must reproduce an older build. The tag-less `github:` shorthand installs `main` HEAD — that is not a release channel.
+Check the version table, stop dsh Web and back up your dsh configuration and session data before upgrading. Install the target host and exact plugin version, keep the existing bundle entry and restart. The plugin retains the `llm-newapi` settings namespace and `newapi` credential reference.
 
-### Option A: npm registry (default, recommended)
+Host `0.1.5` migrates session data; older hosts cannot directly read migrated sessions. Reinstalling an older npm version alone is not a complete rollback. See the [upstream migration guide](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.1.5-rc.1/packages/session/session-format-v2-to-v3/README.md).
 
-```sh
-dsh plugin --profile web add dsh-llm-newapi        # stable: npm latest (auto-follows confirmed releases)
-# dsh plugin --profile web add dsh-llm-newapi@next  # prerelease
+| Symptom | Check first |
+| --- | --- |
+| No NewAPI settings page | The `web` profile, bundle entry, host compatibility and whether Web was restarted |
+| Missing credential | Enter and save the key in NewAPI settings; the plugin does not read `NEWAPI_API_KEY` |
+| Discovery fails | The `/v1` base URL, API key and gateway support for `/models` |
+| Empty model list | Name-based filtering; manually add a model only if it supports chat-completions |
+| models.dev download fails | Network and proxy settings; the plugin proxy applies to this download, while host `0.1.5` also applies environment proxy settings |
+| Missing-peer warnings during install | dsh supplies host packages. If installation and startup succeed, do not install duplicate host packages just to silence these warnings; investigate actual startup errors separately |
 
-# then: register the bundle — edit $DSH_HOME/profiles/web/package.json
-#       (default ~/.dsh/profiles/web/package.json),
-#       add "dsh-llm-newapi" to the dsh.profile.bundles array — and restart dsh web
-```
+## Documentation
 
-### Option B: GitHub shorthand — `#latest` (moving) or `#vX.Y.Z` (pinned)
+The detailed guides below are currently in Chinese:
 
-```sh
-dsh plugin --profile web add "github:wenzetan/dsh-llm-newapi#latest"    # newest confirmed stable
-# dsh plugin --profile web add "github:wenzetan/dsh-llm-newapi#v0.8.1"  # exact version
-# Same bundle registration & restart as Option A
-```
+- [Configuration and troubleshooting](docs/configuration.md): fields, model matching, proxies and save failures.
+- [Development and RC releases](docs/development.md): builds, test coverage and release checks.
+- [Design](DESIGN.md): source map, data flow and implementation decisions.
+- [0.1.5-rc.1 assessment](docs/2026-09-10-dsh-0.1.5-rc.1-assessment.md): version inventory and pending work.
 
-### Option C: Release tarball (no GitHub clone)
-
-```sh
-dsh plugin --profile web add \
-  https://github.com/wenzetan/dsh-llm-newapi/releases/download/v0.8.1/dsh-llm-newapi-0.8.1.tgz
-# Same bundle registration & restart; use the matching -rc.N asset for prereleases
-```
-
-### Option D: local development (link)
-
-```sh
-git clone https://github.com/wenzetan/dsh-llm-newapi && cd dsh-llm-newapi
-npm install && npm run build && npm test
-dsh plugin --profile web add link:$(pwd)
-# Same bundle registration & restart; after changing code re-run npm run build, commit lib/ and restart dsh web
-```
-
-> **Missing-peer warnings at install time are expected and can be ignored**: `react`/`cordis`/`dsh-llm`/`dsh-settings`/`schemastery` etc. are provided at runtime by the dsh host app; declaring them as `peerDependencies` is exactly how the plugin says "don't install your own copy". The profile's `autoInstallPeers: false` makes pnpm report them as missing. Every dsh plugin shows this WARN on install (dsh-at-file is the same); installation succeeds regardless. Do not install that list manually or enable autoInstallPeers — it causes duplicate cordis services and the plugin silently failing.
-
-After install: a "NewAPI" page appears in the settings panel → fill in the API key and the gateway address (including `/v1`) → "Fetch model info" pulls the model list and lets you pick chat models (embedding / rerank / ranker are filtered automatically) → save. The `newapi` route's models then show up in the model picker (composer).
-
-## Verified host compatibility
-
-"Verified" means the versions this repo actually develops against locally, exercised by the automated suites — not hearsay. For any other host version, `npm run test:host` is the authoritative check.
-
-| Host line | `@deepseek-ai/dsh-llm` it ships | Loads | Verified by |
-| --- | --- | --- | --- |
-| dsh `0.1.2-rc` (npm `next`; the line this repo builds and typechecks against) | `0.1.2-rc.1` | ✅ | full behavior suites — `npm test` (cordis real-mount smoke against the current seam: registration, streaming translate, tool-call assembly, settings writes through `ctx.settings.installSection`; vitest client against the Remote-namespace wire) + `npm run typecheck` + the export gate below |
-
-- The build targets the current dsh seam (0.1.2-rc.1): `ToolCallId` branding on `dsh-llm`, settings sections installed through the `settings` service, model-discovery cancellation as a separate signal, and the RPC `handle(channel, handler)` without a per-handle authority option. Hosts from the older 0.1.1-rc / 0.0.1-rc lines are **not** supported by this build — the browser half speaks to the Remote-namespace wire those hosts do not expose. On first boot, an older host stops with an actionable `requires dsh >= 0.1.2-rc.1` message and the `npm install -g @deepseek-ai/dsh@next` upgrade command instead of loading only half the plugin or leaking a raw module error.
-- `npm run test:host` additionally gates the built entry: every runtime `@deepseek-ai/dsh-llm` import in `lib/index.js` must exist on **both** the workspace-resolved surface and the checked-in host snapshot (`test/fixtures/dsh-llm-0.1.2-rc.1.exports.json`, captured from the real npm package). It also links the entry against an older-host fixture and requires that explicit version rejection. A host-side rename dies here — at ESM link time in a real boot — instead of on a user's machine; regenerate the snapshot per new host line.
-
-## Configuration (cordis.yml entry config; after install the `llm-newapi:` section in settings.yaml hot-reloads and overrides it)
-
-```yaml
-- id: llm-newapi
-  name: dsh-llm-newapi
-  config:
-    baseURL: http://gw.local:3000/v1   # include the /v1 prefix; falls back to env NEWAPI_BASE_URL → placeholder
-    # models:                          # suggested catalog; empty by default, use "Fetch model info" to pull /models
-    #   - id: deepseek-chat
-    #     contextWindow: 65536
-    # modelExcludePatterns:            # chat-only filter during discovery (replaces the default wholesale)
-    #   - embed                        #   default ['embed','rerank','ranker'] (case-insensitive id substring)
-    #   - rerank                       #   set [] to disable the filter; multi-capability ids (bge-m3) must be added manually
-    # defaultContextWindow: 128000     # context capacity when the catalog has no entry
-    # maxTokens: 8192                  # when absent, max_tokens is not sent and each upstream default applies
-    # providerHints:                   # official-vendor arbitration for models.dev parameter matching
-    #   defaults:                      #   family prefix → provider (overrides built-ins like glm→zai)
-    #     glm: zhipuai                 #   e.g. use the ZhipuAI open platform data instead
-    #   models:                        #   per-id exact → provider (takes precedence over family)
-    #     tencent/Hunyuan-MT-7B: nano-gpt
-```
-
-**API key**: not a config item — it lives under the fixed `newapi` reference in the credentials store, and its only configuration surface is the web settings page (takes effect immediately on write, resolved per request). The plugin never reads the key from environment variables: the top read-only layer of the credentials service is inherited from the environment, so a `NEWAPI_API_KEY`-style reference would be shadowed by an identically-named env var and lock the front-end input; hence the fixed reference name `newapi`. Without a key, the first request fails with `MISSING_CREDENTIAL` and points to the settings page — it never errors at load time.
-
-**Model discovery**: `GET {baseURL}/models`; only models that can serve chat-completions are adopted — embedding / rerank / ranker families are filtered by naming convention (configurable).
-
-**Web settings page**: discovered at runtime by dsh web through the `dsh.client` manifest (`ClientModuleRegistry` scans composition plugin lines), contributing a `settings.section` slot (dsh contract: features own their settings page, no shell changes). Note it is a standalone "NewAPI" page in the settings panel, not embedded inside the official Models page. Inputs and buttons all use `--dsw-alias-*` design tokens (same recipe as the official Models page), adapting automatically to light / dark themes.
-
-**Config validation**: the settings write point rejects segments the adapter cannot serve (e.g. non-http(s) baseURL, empty filter entries) — constraints the schema cannot express are reported at write time, so you never get "saved successfully but silently kept old values".
-
-## Release flow (prerelease → manual confirmation → stable)
-
-- **Prerelease**: write the `package.json` version as `X.Y.Z-rc.N` and push tag `vX.Y.Z-rc.N`. After the full four gates (build / plugin-check / boot / release): the GitHub Release is marked **Pre-release** and npm publishes to the **`next`** dist-tag (`latest` untouched). Install: `dsh plugin --profile web add dsh-llm-newapi@next`.
-- **Promote to stable** (manual confirmation): Actions → CI → Run workflow → fill in `rc_tag` (e.g. `v0.8.2-rc.1`). The promote job verifies that rc's CI is fully green and the stable tag is unoccupied, then creates `vX.Y.Z` on the same commit — which automatically runs the stable release (full Release + npm `latest`). The GitHub `latest` tag is moved to the same commit, so `github:wenzetan/dsh-llm-newapi#latest` always resolves to the newest confirmed stable.
-- Any tag with a `-` suffix is treated as a prerelease; stable tags are created exclusively by promote, so `latest` is always a manually confirmed version.
-
-## Build & test (development in this repo)
-
-```sh
-npm install && npm run build   # host: tsc types + esbuild → lib/index.js; client: closure-factory → lib/client.js
-npm test                       # vitest client + host-compat gate (0.1.2-rc.1 export surfaces + offline link fixture) + cordis real-mount smoke
-npm run cache:models-dev      # cache models.dev/api.json locally to .cache/ (gitignored, for development)
-```
-
-**models.dev dev cache**: `.cache/models-dev.api.json` is not committed; it lets you inspect the real field shapes in the catalog (`limit.context/output`, `reasoning_options`) during development; when the optional smoke block detects it, real data validates `matchModelsDev` (skipped when missing, CI unaffected). Refreshing tries direct access to models.dev first, then the `HTTPS_PROXY` env var; when both are unreachable it synthesizes a subset snapshot from the GitHub source (sst/models.dev model TOML) and marks `_source`.
-
-After changing source, re-run `npm run build` and **commit `lib/`** — `github:` installs run from the committed artifacts, and the CI "Committed artifacts are current" step rejects stale outputs.
-
-## Status
-
-**main (unreleased): dsh 0.1.2-rc.1 adaptation** — the build target and devDependencies moved from the `0.0.1-rc.*`/`0.1.1-rc` npm line to the current dsh seam (`0.1.2-rc.1`, the `next` dist-tag / this source checkout). Host: tool-call ids are branded with `ToolCallId` (type-only; no runtime import), model discovery receives cancellation as a separate `signal` (`LlmModelDiscoveryRequest` no longer carries it), the settings section installs through `ctx.settings.installSection` (settings seam) instead of the removed top-level helpers, the relocated `deepEqualJson` behavior is kept as a dependency-free local helper so older hosts can reach the explicit version guard, and the RPC channel registers as `handle(channel, handler)` — loopback-only exposure is now the connection service's own fence. Browser: the half mounts as a plain cordis plugin (`inject`/`apply`) with no client-runtime package; data access rides the typert Remote namespaces (`ctx.remote.settings`/`credentials`/`llm`) and the `settings.section` slot now declares its `locale` seat; the client bundle's only runtime externals are react + jsx-runtime (every dsh type face is type-only). `typescript` is now an explicit devDependency so `npm run build`/`typecheck` work from a clean install.
-
-v0.8.3: tool-call id/name delta hardening (#1) — some gateways (glm-5.3 via qcplay) repeat `tool_calls[].id` and `function.name` on every continuation delta as **empty strings** instead of omitting the fields; the presence-only merge overwrote the first delta's real tool name with `''`, so every tool call failed as `unknown tool`. The translator now accepts only non-empty `id`/`name` values (matching the existing non-empty guards on text/reasoning deltas); argument concatenation is unchanged.
-
-v0.8.1: preset reasoning effort — the effort field in a model row's advanced area is now a dropdown, letting users set one level as default (`defaultReasoningEffort` persisted); when nothing is preset, the **highest** declared level is used by default (max>xhigh>high>medium>low>…); `resolveModel` declares `defaultEffort` and the composer auto-selects that level when switching reasoning modes. Write validation: the preset must belong to that model's effort list.
-
-v0.8.0: parameter-matching engine rework — **built-in family hints + approximate-key matching + configurable overrides**. Built-in family defaults (glm→zai, gpt→openai, claude→anthropic, deepseek→deepseek, gemini→google, grok→xai, qwen→alibaba, kimi→moonshotai, mimo→xiaomi, minimax→minimax, hunyuan→tencent) put the official entry first and mark it "official" among candidates; **approximate keys** are supported inside the official vendor (when the catalog lacks that exact version, take the closest family entry, e.g. glm-5.3→zai's glm-5); no cross-vendor approximation to avoid noise; `providerHints` config can override/extend (`defaults` family prefix + `models` per-id exact, per-id takes precedence). Order: hinted official → exact key (catalog order) → registry official supplement. Measured: 22 models, 20 resolved directly to official (including real reasoning efforts); qwen27b-coder has no match (id absent from the catalog); tencent/Hunyuan-MT-7B falls to nano-gpt (official tencent has no such model).
-
-v0.7.2: "Clear" button in the model catalog title row — same semantics as per-row delete, removes all model rows at once; resets expanded state, capacity input buffers and the parameter results panel; disabled when the catalog is empty; saving writes an empty `models` array.
-
-v0.7.1: parameter matching prefers official by default — when multiple vendors match, the official vendor's entry is put first and marked "official" (the panel defaults to item 0, i.e. the official parameters); the authoritative source is the built-in model catalogs of other routes in the dsh-llm registry (e.g. the deepseek route declares deepseek-v4-flash, so api.json uses the deepseek vendor entry), matched by bare model id (multi-segment ids look up the last segment); the index rebuilds automatically when the route set changes.
-
-v0.7.0: display-name generation supports brand spelling (glm→GLM, gpt→GPT, deepseek→DeepSeek), multi-segment ids append the raw prefix in parentheses (`deepseek-ai/deepseek-v4-flash`→`DeepSeek V4 Flash[deepseek-ai]`), size-suffix uppercasing limited to b/k/m (`gpt-4o` keeps lowercase o); **end-to-end reasoning effort** — "Fetch model info from models.dev" now also brings in the effort list from `reasoning_options` (null dropped), stored in the catalog's `reasoningEfforts` field, `resolveModel` declares selectable reasoning efforts from it (the composer shows an effort selector), an explicit effort goes on the wire via the OpenAI-compatible `reasoning_effort` field; the row's advanced area shows it read-only, and the results panel + provider selector display it in sync.
-
-v0.6.3: the fetch-model adoption chain is sorted by id end to end — the candidate list is re-sorted client-side after pulling (not dependent on the host-side version); after "Add selected", the form rows merge into one alphabetical list (old and new rows sorted together); half-formed rows with empty ids sink to the bottom.
-
-v0.6.2: fetch-model auto-generates display names — when the gateway listing has no name, derive one from the id: multi-segment ids keep only the content after the last `/`, `-` becomes a space, each word's first letter is capitalized, trailing single-letter size suffixes are uppercased (`qwen3-32b`→Qwen3 32B, `glm-4.5-air`→Glm 4.5 Air, `llama-3.1-70b`→Llama 3.1 70B); names provided by the listing still win.
-
-v0.6.1: proxy control simplified — the preset dropdown is gone, leaving a single text field whose default and placeholder are both `http://127.0.0.1:7890` (saving an empty value falls back to that default).
-
-v0.6.0: parameter results panel rearranged — the model id is a fixed 30ch text field (left-aligned; oversized content scrolls horizontally on hover so row alignment no longer drifts), and the right-side mapping column is explicitly left-aligned; "Fetch model info from models.dev" now gives immediate feedback: the status line shows "matched N · unmatched M" counts, and the results panel auto-scrolls into view (long model lists no longer push the panel off-screen).
-
-v0.5.8: action copy changed to "Fetch model info from models.dev"; fixed the misleading failure hint — when the proxy is on but the proxy itself is unreachable (ECONNREFUSED), the old message wrongly suggested "enable the proxy"; now it distinguishes by actual route: proxy-path failures name "proxy at <url> is unreachable; check that it is running, or change or disable the proxy setting", and only direct-path failures suggest enabling the proxy.
-
-v0.5.7: fixed the published package's type entry — declaration emit left a `.ts` specifier (`rewriteRelativeImportExtensions` does not apply to d.ts), breaking consumer type resolution; the host build now rewrites relative `.ts` to `.js` in `lib/types/*.d.ts`. Added `prepack` script. CI gained the dsh-plugin-check compliance gate (manifest protocol / patch format / build pitfalls; verdict must pass; this repo went from fail to green).
-
-v0.5.6: fixed "Update model info" HTTP 500 — download failures (models.dev unreachable directly, dead proxy, etc.) previously threw, which the transport layer mapped to an opaque 500; the handler now returns an error envelope and the settings page shows the underlying cause directly (DNS / refused / timeout) with the "enable proxy" hint. Also fixed the dual-undici issue on the proxy path: npm undici's ProxyAgent is rejected by Node's built-in fetch brand check, so proxy requests now go through npm undici's own fetch.
-
-v0.5.4: CI boot gate stabilized — the runner installs pnpm (the profile plugin flow depends on it; a bare runner lacked it, making the gate fail on first run); the three gate assertions (:3080 ready, client bundle 200, RPC channel not 405) are green end-to-end on tag builds.
-
-v0.5.3: fixed undici missing from production installs — undici previously sat in both dependencies and devDependencies, and `--omit=dev` installs (the CI self-containment gate's clean directory) dropped the same-named devDep wholesale instead of falling back to the prod declaration, making the bundled output unresolvable in isolation; removing it from devDependencies turned the CI gate green. CI gained a boot gate: install dsh globally → fresh DSH_HOME installs the tarball via `dsh plugin add` → start `dsh web` in the background, requiring :3080 ready, `/plugins/dsh-llm-newapi/client.js` retrievable, and `/llm-newapi/models-dev-params` not 405.
-
-v0.5.2: fixed "Update model info" HTTP 405 — the RPC channel previously read `ctx.get('connection')` eagerly in apply, silently skipping registration when the plugin mounted before the web app started the connection service (got `undefined`); it now uses `ctx.inject(['connection'], …)` to register once the service is ready (re-run automatically on service reload), and a smoke scenario pins the "plugin mounts first, service starts later" ordering.
-
-v0.5.1: undici moved from peerDependencies into dependencies (the host does not provide undici; under `autoInstallPeers: false` unresolved peers made the whole plugin tree fail to load); CI gained a self-containment gate — `npm pack` output is unpacked into a clean directory installing production deps only, and every non-host-provided bare import in the host bundle must resolve.
-
-v0.5: discovery results sorted by id; display names for `a/b`-shaped ids take the last segment (wire id unchanged); new "Update model info" — the browser sends model ids (and the proxy draft) to the host via the RPC (`/llm-newapi` channel), the backend downloads `https://models.dev/api.json` and matches by id/last segment, returning `limit.context`/`limit.output`; same-name multi-vendor entries are chosen by the user in the results panel; applying supports "overwrite" or "fill blanks only", unmatched rows keep their values with a count hint. Proxy toggle off by default, default `http://127.0.0.1:7890`, three preset dropdown entries 7890/7897/10809 plus custom input; enabled state and address persist with the settings section (used only for that download; gateway traffic does not go through the proxy).
-
-v0.4: model catalog redesigned after the official Models page (`ModelListEditor`) — each model is a bordered card (id + display name inline), context window / max output collapsed behind the leading chevron, with K/M shorthand input (`256K`→256000, `1M`→1000000) and per-field input buffers; local validation before saving (empty id / duplicate id / unparseable capacity are rejected and the row named); empty-state hint and pill "Add model" button; deleting rows re-aligns expanded state and buffers by row number.
-
-v0.3: API key moved to pure front-end configuration (fixed credentials reference `newapi`; removed the `apiKeyEnv` config and env fallback); settings page uses `--dsw-alias-*` design tokens, adapting to light/dark themes; settings write point gained validate rejection; `WireAssistantMessage.content` type tightened to `string`. The dual-face structure (host adapter + chat-only-filtered discovery, browser NewAPI settings page) is unchanged; typecheck / build / smoke all green; artifacts committed + CI sync check + Release tarball. Known npm rc gap stubbed via overrides (see DESIGN §8).
+See [GitHub Releases](https://github.com/wenzetan/dsh-llm-newapi/releases) for published changes and downloadable packages.

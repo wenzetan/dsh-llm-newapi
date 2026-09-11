@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       rc_tag:
-        description: 'Promote a green pre-release tag to its stable twin on the same commit (e.g. v0.8.2-rc.5 -> v0.8.2). Leave empty to only run the gates.'
+        description: 'Promote a successful pre-release tag to its stable twin on the same commit (e.g. v0.8.2-rc.5 -> v0.8.2). Leave empty to run checks only.'
         required: false
         type: string
 
@@ -71,7 +71,7 @@ jobs:
           path: dsh-llm-newapi-*.tgz
           if-no-files-found: error
 
-  # Compliance gate: run the dsh-plugin-check diagnostics (manifest
+  # Plugin compliance check: run the dsh-plugin-check diagnostics (manifest
   # protocol / patch format / build pitfalls) over this repository and
   # require a pass verdict. The checker is cloned and built from its own
   # repo; its exported checkRepo() is a read-only static scan, so this job
@@ -115,7 +115,7 @@ jobs:
             }
           "
 
-  # Real-boot gate: install the packed tarball through the dsh CLI into a
+  # Real startup check: install the packed tarball through the dsh CLI into a
   # fresh DSH_HOME and require `dsh web` to boot serving the plugin. This is
   # the check that would have caught both shipped breakages: v0.5.0 (a peer
   # the host does not provide made the whole plugin tree fail to load) and
@@ -211,7 +211,7 @@ jobs:
           echo "client bundle referenced in the boot graph"
           # Exercise the registered channel through the authenticated session.
           # Use the channel's local unknown-endpoint response instead of the
-          # models-dev method, which would make this boot gate depend on a
+          # models-dev method, which would make this startup check depend on a
           # third-party catalog download. Requiring an actual 200 response
           # still avoids treating auth errors or the SPA fallback as success.
           WEB_ORIGIN="${auth_url%%\?*}"
@@ -235,7 +235,7 @@ jobs:
               throw new Error("unexpected channel probe response: " + JSON.stringify(body))
             }
           ' "$RPC_BODY"
-          echo "boot gate passed: authenticated web ready, client bundle in boot graph, RPC channel HTTP $rpc"
+          echo "startup check passed: authenticated web ready, client bundle in boot graph, RPC channel HTTP $rpc"
 
   # A tag like v0.8.2-rc.1 publishes as a TEST version everywhere: GitHub
   # Release marked pre-release, npm under the `next` dist-tag. The stable

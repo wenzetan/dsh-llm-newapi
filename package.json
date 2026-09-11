@@ -20,6 +20,7 @@
     "scripts/build-client.mjs",
     "cordis.patch.yml",
     "DESIGN.md",
+    "docs/*.md",
     "README.md",
     "README.zh-CN.md"
   ],
