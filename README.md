@@ -12,10 +12,10 @@ Use your NewAPI gateway in [DeepSeek Harness](https://github.com/deepseek-ai/dee
 | --- | --- | --- |
 | `0.1.1-rc.2` | `0.8.4` | Published; plugin npm `latest` |
 | `0.1.2-rc.1` | `0.8.6-rc.1` | Published; the last release for that host line |
-| `0.1.5-rc.1`, `0.1.5-rc.2` | `0.8.6-rc.2` | Published; superseded by `0.8.6-rc.3` |
-| `0.1.5-rc.1`, `0.1.5-rc.2` | **`0.8.6-rc.3`** | **Current release**; npm `next`, GitHub Pre-release. Adds the select-all box to the fetched-model picker |
+| `0.1.5-rc` | `0.8.6-rc.2` | Published; superseded by `0.8.6-rc.3` |
+| **`0.1.5-rc`** | **`0.8.6-rc.3`** | **Current release**; npm `next`, GitHub Pre-release. Adds the select-all box to the fetched-model picker |
 
-Plugin `0.8.6-rc.3` targets the `0.1.5` host line and rejects the older `0.1.2-rc.1` host with an explicit upgrade message; `0.1.2-rc.1` users stay on plugin `0.8.6-rc.1`. Both `0.1.5-rc.1` and `0.1.5-rc.2` were verified: they ship identical `lib/**` code, and the plugin builds byte-identical output against either. See the [compatibility assessment (Chinese)](docs/2026-09-10-dsh-0.1.5-rc.1-assessment.md).
+Plugin `0.8.6-rc.3` supports the **dsh `0.1.5-rc` line** and rejects the older `0.1.2-rc.1` host with an explicit upgrade message; `0.1.2-rc.1` users stay on plugin `0.8.6-rc.1`. Compatibility is keyed to the host line rather than one patch: within `0.1.5-rc` the seam surface is fixed, so `0.1.5-rc.1` and `0.1.5-rc.2` ship identical `lib/**` code and the plugin builds byte-identical output against either. A later `0.1.5-rc` cut is covered as long as its export surface matches — `npm run test:host` compares the installed surface against the checked-in one and fails loudly when it does not, instead of assuming. See the [compatibility assessment (Chinese)](docs/2026-09-10-dsh-0.1.5-rc.1-assessment.md).
 
 Releases stay on the **pre-release channel**: npm `next` and a GitHub Pre-release. Nothing here promotes a stable version or moves the plugin's `latest` tag, which stays on `0.8.4`. The host and plugin have separate release channels; their respective `latest` versions are not necessarily compatible.
 
@@ -41,9 +41,7 @@ dsh plugin --profile web add --save-exact dsh-llm-newapi@0.8.4
 
 Choose one pair. `--save-exact` records an exact plugin dependency so a later dependency update does not switch versions automatically. Use `dsh plugin` to manage the profile; installing `dsh-llm-newapi` globally by itself does not register it there.
 
-### New host pair: run only after rc.2 is published
-
-**rc.2 is not published yet.** These are the planned commands. Check that the version exists before installing:
+### Current host pair (dsh `0.1.5-rc`)
 
 ```sh
 npm view dsh-llm-newapi@0.8.6-rc.3 version
