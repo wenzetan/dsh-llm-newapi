@@ -15,8 +15,8 @@
  *  A. Export gate (always): every `@deepseek-ai/dsh-llm` named runtime import
  *     in the built host entry `lib/index.js` must exist on BOTH the
  *     workspace-resolved surface (live import — the line we build and
- *     typecheck against) and the checked-in 0.1.5-rc.1 surface snapshot
- *     (test/fixtures/dsh-llm-0.1.5-rc.1.exports.json). The sole permitted
+ *     typecheck against) and the checked-in 0.1.5-line surface snapshot
+ *     (test/fixtures/dsh-llm-0.1.5.exports.json). The sole permitted
  *     subpath is the package.json version probe exported by both host lines.
  *  B. Surface link fixture (always, offline): a scratch `node_modules` layout
  *     shadows `@deepseek-ai/dsh-llm` with a stub exposing exactly the
@@ -28,11 +28,12 @@
  *     sees a 0.1.2-rc.1 package version — the previous supported host line,
  *     which rc.2 deliberately drops — and must fail with the explicit
  *     minimum-version and upgrade guidance, never a raw resolver error.
- *  D. Snapshot drift guard (always, offline): the checked-in snapshot must
- *     match the @deepseek-ai/dsh-llm the lockfile actually installs — version
- *     and named surface both. One package version is supported, so a host
- *     bump must regenerate the snapshot in the same change; this block cannot
- *     be skipped and has no "extract absent" escape hatch.
+ *  D. Snapshot drift guard (always, offline): the installed
+ *     @deepseek-ai/dsh-llm must be a version recorded as sharing the checked-in
+ *     surface, and its named exports must equal the snapshot exactly. Upstream
+ *     re-cuts an RC with identical code, so membership is per version while the
+ *     surface is per host line; an unlisted version fails loudly instead of
+ *     passing on a guess. This block cannot be skipped.
  *  E. Rejected-host link guard (always, offline): the built entry's
  *     `@deepseek-ai/dsh-llm` imports must ALSO exist on the older 0.1.2-rc.1
  *     surface. The version guard lives inside the entry, so it only produces
@@ -47,7 +48,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const BUILT_ENTRY = join(ROOT, 'lib', 'index.js')
-const SNAPSHOT_PATH = join(ROOT, 'test', 'fixtures', 'dsh-llm-0.1.5-rc.1.exports.json')
+const SNAPSHOT_PATH = join(ROOT, 'test', 'fixtures', 'dsh-llm-0.1.5.exports.json')
 /** The host line this plugin now REJECTS, kept to protect that rejection's quality. */
 const REJECTED_SNAPSHOT_PATH = join(ROOT, 'test', 'fixtures', 'dsh-llm-0.1.2-rc.1.exports.json')
 const SCRATCH = join(ROOT, 'test', '.tmp-host-surface')
@@ -96,7 +97,7 @@ function namedImportsFrom(source, specifier) {
   assert.deepEqual(missing.workspace, [],
     `lib/index.js imports @deepseek-ai/dsh-llm symbols absent from the workspace-resolved surface (${[...workspace].length} exports) — the build target drift requires a source change`)
   assert.deepEqual(missing.host, [],
-    `lib/index.js imports @deepseek-ai/dsh-llm symbols absent from the pinned host surface ${snapshot.version} (${[...host].length} exports) — the loader entry would die at ESM link time on such a host`)
+    `lib/index.js imports @deepseek-ai/dsh-llm symbols absent from the pinned 0.1.5-line host surface (captured from ${snapshot.capturedFrom}, ${[...host].length} exports) — the loader entry would die at ESM link time on such a host`)
 }
 
 // ── Block B: link the built plugin against a host-surface stub ──
@@ -122,7 +123,9 @@ function namedImportsFrom(source, specifier) {
   ].join('\n'))
   writeFileSync(join(stubPkgDir, 'package.json'), JSON.stringify({
     name: '@deepseek-ai/dsh-llm',
-    version: snapshot.version,
+    // Any version sharing the recorded surface works; the captured one keeps
+    // this fixture independent of whatever the workspace happens to install.
+    version: snapshot.capturedFrom,
     type: 'module',
     main: 'index.js',
     exports: { '.': './index.js', './package.json': './package.json' },
@@ -147,7 +150,7 @@ function namedImportsFrom(source, specifier) {
     ], { encoding: 'utf8', timeout: 60_000 })
   } catch (error) {
     const detail = (error.stdout ?? '') + (error.stderr ?? '')
-    assert.fail(`plugin entry fails to load against the ${snapshot.version} surface stub:\n${detail.trim()}`)
+    assert.fail(`plugin entry fails to load against the ${snapshot.capturedFrom} surface stub:\n${detail.trim()}`)
   }
   assert.match(stdout, /^PLUGIN-LINK-OK \d+/, 'plugin linked and evaluated against the host surface stub')
   rmSync(SCRATCH, { recursive: true, force: true })
@@ -203,12 +206,18 @@ function namedImportsFrom(source, specifier) {
 }
 
 // ── Block D (always): the checked-in snapshot matches the installed host package ──
+// The snapshot records the *seam surface* of the 0.1.5 host line plus the
+// versions known to share it, not a single patch version: upstream re-cuts an
+// RC with identical code (0.1.5-rc.2 changed nothing but version references),
+// and a version-equality assertion would reject that for no reason. Membership
+// stays explicit on purpose — meeting an unlisted version must force someone to
+// compare surfaces and record the result rather than silently pass.
 {
   const snapshot = JSON.parse(readFileSync(SNAPSHOT_PATH, 'utf8'))
   const manifest = await import('@deepseek-ai/dsh-llm/package.json', { with: { type: 'json' } })
   const installedVersion = manifest.default.version
-  assert.equal(installedVersion, snapshot.version,
-    `the resolved @deepseek-ai/dsh-llm is ${installedVersion} but the checked-in snapshot pins ${snapshot.version} — bumping the host line requires regenerating the snapshot and the host-compat expectations together`)
+  assert.ok(snapshot.surfaceSharedBy.includes(installedVersion),
+    `the resolved @deepseek-ai/dsh-llm is ${installedVersion}, which is not among the versions recorded as sharing this surface (${snapshot.surfaceSharedBy.join(', ')}). Compare its export surface against the snapshot, then either add the version or regenerate the snapshot.`)
 
   // The runtime namespace adds `default` to the named surface; the snapshot
   // records the named exports only, because Block B re-declares `default`.
@@ -220,7 +229,7 @@ function namedImportsFrom(source, specifier) {
     { missingFromSnapshot: [], staleInSnapshot: [] },
     `test/fixtures/${SNAPSHOT_PATH.split('/').pop()} no longer matches the installed ${installedVersion} package — regenerate it`,
   )
-  console.log(`host-compat: snapshot matches the installed published dsh-llm ${installedVersion}`)
+  console.log(`host-compat: snapshot matches the installed published dsh-llm ${installedVersion} (surface shared by ${snapshot.surfaceSharedBy.join(', ')})`)
 }
 
 // ── Block E (always, offline): the entry still links on the REJECTED host line ──

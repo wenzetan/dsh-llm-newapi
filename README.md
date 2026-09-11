@@ -12,9 +12,9 @@ Use your NewAPI gateway in [DeepSeek Harness](https://github.com/deepseek-ai/dee
 | --- | --- | --- |
 | `0.1.1-rc.2` | `0.8.4` | Published; plugin npm `latest` |
 | `0.1.2-rc.1` | `0.8.6-rc.1` | Published; plugin npm `next` |
-| `0.1.5-rc.1` | **`0.8.6-rc.2`** | **Verified locally, not published yet**; typecheck, tests, build and package-content checks pass, real-host Web validation remains pending |
+| `0.1.5-rc.1`, `0.1.5-rc.2` | **`0.8.6-rc.2`** | **Verified locally, not published yet**; typecheck, tests, build and package-content checks pass, real-host Web validation remains pending |
 
-Plugin `0.8.6-rc.2` targets the `0.1.5-rc.1` host line only and rejects the older `0.1.2-rc.1` host with an explicit upgrade message; `0.1.2-rc.1` users stay on plugin `0.8.6-rc.1`. See the [compatibility assessment (Chinese)](docs/2026-09-10-dsh-0.1.5-rc.1-assessment.md).
+Plugin `0.8.6-rc.2` targets the `0.1.5` host line and rejects the older `0.1.2-rc.1` host with an explicit upgrade message; `0.1.2-rc.1` users stay on plugin `0.8.6-rc.1`. Both `0.1.5-rc.1` and `0.1.5-rc.2` were verified: they ship identical `lib/**` code, and the plugin builds byte-identical output against either. See the [compatibility assessment (Chinese)](docs/2026-09-10-dsh-0.1.5-rc.1-assessment.md).
 
 The next release will remain **`0.8.6-rc.2`**, published to npm `next` and marked Pre-release on GitHub. It will not promote a stable version or move the plugin's `latest` tag. The host and plugin have separate release channels; their respective `latest` versions are not necessarily compatible.
 

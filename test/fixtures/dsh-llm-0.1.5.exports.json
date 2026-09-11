@@ -1,5 +1,9 @@
 {
-  "version": "0.1.5-rc.1",
+  "capturedFrom": "0.1.5-rc.1",
+  "surfaceSharedBy": [
+    "0.1.5-rc.1",
+    "0.1.5-rc.2"
+  ],
   "exports": [
     "APP_IDENTITY",
     "AssistantStreamAccumulator",
