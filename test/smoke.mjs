@@ -43,6 +43,48 @@ class FakeCredentials extends Service {
   }
 }
 
+/** Minimal web server: records the routes a channel registration installs. */
+class FakeWebServer extends Service {
+  constructor(ctx) {
+    super(ctx, 'webServer')
+    this.routes = []
+  }
+
+  register(route) {
+    this.routes.push(route)
+    return () => {}
+  }
+}
+
+/**
+ * The 0.1.5 connection service, reproduced faithfully enough to catch a
+ * regression. On the real package `rpc.handle` is unusable: its `rpc` getter
+ * captures the service's OWN context, which injects no `webServer`, so the
+ * inner `owner.webServer.register(route)` throws the cordis guard error and
+ * the effect swallows it. Only `register(owner, channel, handler)` called with
+ * a context that injected `webServer` can install a channel — which is what
+ * the plugin must therefore do.
+ */
+class FakeConnection extends Service {
+  constructor(ctx, channels) {
+    super(ctx, 'connection')
+    this.channels = channels
+  }
+
+  get rpc() {
+    const owner = this.ctx
+    return { handle: (channel, handler) => this.register(owner, channel, handler) }
+  }
+
+  register(owner, channel, handler) {
+    return owner.effect(() => {
+      const dispose = owner.webServer.register({ kind: 'prefix', path: channel })
+      this.channels.push({ channel, handler })
+      return dispose
+    })
+  }
+}
+
 async function mountPlugin(ctx, config = {}) {
   return ctx.plugin({
     name: plugin.name,
@@ -311,21 +353,11 @@ function stubModelsListing() {
   await mountPlugin(ctx)
 
   const registered = []
-  class FakeConnection extends Service {
-    constructor(child) { super(child, 'connection') }
-    get rpc() {
-      return {
-        handle: (channel, handler) => {
-          registered.push({ channel, handler })
-          return () => Promise.resolve()
-        },
-      }
-    }
-  }
-  await ctx.plugin(FakeConnection)
+  await ctx.plugin(FakeWebServer)
+  await ctx.plugin(FakeConnection, registered)
 
-  // The inject scope ran as soon as the service appeared. Loopback-only
-  // exposure is the connection service's own fence in the 0.1.5-rc.1 line:
+  // The inject scope ran as soon as both services appeared. Loopback-only
+  // exposure is the connection service's own fence in the 0.1.5 line:
   // channel registration no longer carries a per-handle authority option.
   assert.equal(registered.length, 1)
   assert.equal(registered[0].channel, '/llm-newapi')
@@ -378,18 +410,8 @@ function stubModelsListing() {
   await mountPlugin(ctx)
 
   const channels = []
-  class FakeConnectionH extends Service {
-    constructor(child) { super(child, 'connection') }
-    get rpc() {
-      return {
-        handle: (channel, handler) => {
-          channels.push(handler)
-          return () => Promise.resolve()
-        },
-      }
-    }
-  }
-  await ctx.plugin(FakeConnectionH)
+  await ctx.plugin(FakeWebServer)
+  await ctx.plugin(FakeConnection, channels)
 
   const originalFetch = globalThis.fetch
   globalThis.fetch = async () => new Response(JSON.stringify({
@@ -398,7 +420,7 @@ function stubModelsListing() {
   }), { status: 200, headers: { 'content-type': 'application/json' } })
   let answer
   try {
-    answer = await channels[0]('models-dev-params', { modelIds: ['gwmax-1'] }, new AbortController().signal)
+    answer = await channels[0].handler('models-dev-params', { modelIds: ['gwmax-1'] }, new AbortController().signal)
   } finally {
     globalThis.fetch = originalFetch
   }
