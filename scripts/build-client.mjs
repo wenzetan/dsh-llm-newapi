@@ -5,7 +5,7 @@
  * runtime). This mirrors the repository-internal `clientBundle` tsdown
  * preset (packages/client/tsdown.client.ts) and the browser module loader
  * contract (packages/client/modules/src/client/manifest.ts) of the dsh
- * 0.1.2-rc.1 line.
+ * 0.1.5-rc.1 line.
  */
 import { build } from 'esbuild'
 
@@ -13,7 +13,7 @@ const ID = 'dsh-llm-newapi'
 
 /**
  * Loader module-table specifiers: everything the bundle requires instead of
- * inlining. dsh 0.1.2-rc.1: the browser module table provides the shell seed
+ * inlining. dsh 0.1.5-rc.1: the browser module table provides the shell seed
  * words (react, react/jsx-runtime, react-dom, react-dom/client, cordis,
  * client-store, ui-slots, ui-primitives) — see packages/client/web/src/
  * platform.ts. The section imports every dsh type face (`.../client`,

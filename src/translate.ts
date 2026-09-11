@@ -65,11 +65,20 @@ export function mapFinishReason(reason: string): FinishReason {
 export function mapUsage(usage: WireUsage): TokenUsage {
   const cacheRead = usage.prompt_tokens_details?.cached_tokens ?? usage.prompt_cache_hit_tokens
   const reasoning = usage.completion_tokens_details?.reasoning_tokens
+  const combined = usage.prompt_tokens + usage.completion_tokens
+  const hasValidCombined = Number.isSafeInteger(usage.prompt_tokens)
+    && usage.prompt_tokens >= 0
+    && Number.isSafeInteger(usage.completion_tokens)
+    && usage.completion_tokens >= 0
+    && Number.isSafeInteger(combined)
+    && combined >= 0
+    && (usage.total_tokens === undefined || usage.total_tokens === combined)
   return {
     inputTokens: usage.prompt_tokens - (cacheRead ?? 0),
     outputTokens: usage.completion_tokens,
     ...cacheRead !== undefined ? { cacheReadTokens: cacheRead } : {},
     ...reasoning !== undefined ? { reasoningTokens: reasoning } : {},
+    ...hasValidCombined ? { totalTokens: combined } : {},
   }
 }
 

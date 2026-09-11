@@ -1,13 +1,13 @@
 /**
  * Host-line compatibility gate for the built plugin.
  *
- * The plugin builds and typechecks against the dsh 0.1.2-rc.1 seam
- * (`@deepseek-ai/dsh-llm` 0.1.2-rc.1). A static named runtime import of a
+ * The plugin builds and typechecks against the dsh 0.1.5-rc.1 seam
+ * (`@deepseek-ai/dsh-llm` 0.1.5-rc.1). A static named runtime import of a
  * symbol the HOST's dsh-llm does not export makes the whole `llm-newapi`
  * loader entry die at ESM link time (`SyntaxError: … does not provide an
  * export named 'X'`) — before any provider code runs. This gate pins that
  * contract: the built entry may only import dsh-llm symbols that exist on
- * the workspace-resolved surface AND on the checked-in 0.1.2-rc.1 surface
+ * the workspace-resolved surface AND on the checked-in 0.1.5-rc.1 surface
  * snapshot (captured from the published package), so a rename on either side
  * is caught here instead of in a booting host.
  *
@@ -15,8 +15,8 @@
  *  A. Export gate (always): every `@deepseek-ai/dsh-llm` named runtime import
  *     in the built host entry `lib/index.js` must exist on BOTH the
  *     workspace-resolved surface (live import — the line we build and
- *     typecheck against) and the checked-in 0.1.2-rc.1 surface snapshot
- *     (test/fixtures/dsh-llm-0.1.2-rc.1.exports.json). The sole permitted
+ *     typecheck against) and the checked-in 0.1.5-rc.1 surface snapshot
+ *     (test/fixtures/dsh-llm-0.1.5-rc.1.exports.json). The sole permitted
  *     subpath is the package.json version probe exported by both host lines.
  *  B. Surface link fixture (always, offline): a scratch `node_modules` layout
  *     shadows `@deepseek-ai/dsh-llm` with a stub exposing exactly the
@@ -25,12 +25,19 @@
  *     import the copied plugin entry cleanly — this reproduces the
  *     link-time SyntaxError failure mode without network access.
  *  C. Old-host rejection fixture (always, offline): the same copied entry
- *     sees a 0.1.1-rc.2 package version and must fail with the explicit
+ *     sees a 0.1.2-rc.1 package version — the previous supported host line,
+ *     which rc.2 deliberately drops — and must fail with the explicit
  *     minimum-version and upgrade guidance, never a raw resolver error.
- *  D. Snapshot drift guard (dev-only): when the real package extract is
- *     present (`.tmp-host/package`, fetched during investigation / by
- *     regenerating the snapshot), its export statement is re-parsed and must
- *     match the checked-in snapshot, so the fixture cannot silently rot.
+ *  D. Snapshot drift guard (always, offline): the checked-in snapshot must
+ *     match the @deepseek-ai/dsh-llm the lockfile actually installs — version
+ *     and named surface both. One package version is supported, so a host
+ *     bump must regenerate the snapshot in the same change; this block cannot
+ *     be skipped and has no "extract absent" escape hatch.
+ *  E. Rejected-host link guard (always, offline): the built entry's
+ *     `@deepseek-ai/dsh-llm` imports must ALSO exist on the older 0.1.2-rc.1
+ *     surface. The version guard lives inside the entry, so it only produces
+ *     its friendly upgrade message if the module links first; a 0.1.5-only
+ *     import would instead surface a raw ESM SyntaxError on that host.
  */
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
@@ -40,9 +47,10 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const BUILT_ENTRY = join(ROOT, 'lib', 'index.js')
-const SNAPSHOT_PATH = join(ROOT, 'test', 'fixtures', 'dsh-llm-0.1.2-rc.1.exports.json')
+const SNAPSHOT_PATH = join(ROOT, 'test', 'fixtures', 'dsh-llm-0.1.5-rc.1.exports.json')
+/** The host line this plugin now REJECTS, kept to protect that rejection's quality. */
+const REJECTED_SNAPSHOT_PATH = join(ROOT, 'test', 'fixtures', 'dsh-llm-0.1.2-rc.1.exports.json')
 const SCRATCH = join(ROOT, 'test', '.tmp-host-surface')
-const REAL_HOST_EXTRACT = join(ROOT, '.tmp-host', 'package', 'lib', 'index.js')
 
 /** Parse `import { A, B as C } from "@deepseek-ai/dsh-llm"` occurrences. */
 function namedImportsFrom(source, specifier) {
@@ -59,19 +67,6 @@ function namedImportsFrom(source, specifier) {
     }
   }
   return symbols
-}
-
-/** Export names of the real host-package extract, statically parsed. */
-function parseExportStatement(path) {
-  const source = readFileSync(path, 'utf8')
-  const statements = [...source.matchAll(/export\s*\{([^}]+)\}/g)]
-  assert.ok(statements.length > 0, `${path}: no export statement found`)
-  const names = statements
-    .flatMap(statement => statement[1].split(','))
-    .map(name => name.trim())
-    .filter(Boolean)
-    .map(name => name.split(/\s+as\s+/)[0].trim())
-  return new Set(names.filter(name => name !== 'default'))
 }
 
 // ── Block A: export gate — runtime imports ⊆ workspace surface ∩ host snapshot ──
@@ -162,7 +157,7 @@ function parseExportStatement(path) {
 {
   const built = readFileSync(BUILT_ENTRY, 'utf8')
   assert.doesNotMatch(built, /from\s*["']@deepseek-ai\/dsh-util-values["']/u,
-    'the compatibility guard must run before any dependency absent from dsh 0.1.1; keep deepEqualJson local')
+    'the compatibility guard must run before any dependency absent from the rejected 0.1.2 line; keep deepEqualJson local')
 
   rmSync(SCRATCH, { recursive: true, force: true })
   const stubPkgDir = join(SCRATCH, 'node_modules', '@deepseek-ai', 'dsh-llm')
@@ -182,7 +177,7 @@ function parseExportStatement(path) {
   ].join('\n'))
   writeFileSync(join(stubPkgDir, 'package.json'), JSON.stringify({
     name: '@deepseek-ai/dsh-llm',
-    version: '0.1.1-rc.2',
+    version: '0.1.2-rc.1',
     type: 'module',
     main: 'index.js',
     exports: { '.': './index.js', './package.json': './package.json' },
@@ -197,31 +192,55 @@ function parseExportStatement(path) {
     `import(${JSON.stringify(pathToFileURL(join(pluginDir, 'lib', 'index.js')).href)}).catch(error => { console.error(error.constructor.name + ': ' + error.message); process.exit(1) })`,
   ], { encoding: 'utf8', timeout: 60_000 })
   const detail = `${result.stdout ?? ''}${result.stderr ?? ''}`
-  assert.notEqual(result.status, 0, 'an unsupported dsh 0.1.1 host must reject this plugin')
-  assert.match(detail, /requires dsh >= 0\.1\.2-rc\.1/u,
+  assert.notEqual(result.status, 0, 'an unsupported dsh 0.1.2 host must reject this plugin')
+  assert.match(detail, /requires dsh >= 0\.1\.5-rc\.1/u,
     `old-host rejection must state the minimum supported dsh version:\n${detail.trim()}`)
-  assert.match(detail, /npm install -g @deepseek-ai\/dsh@next/u,
-    `old-host rejection must include an upgrade command:\n${detail.trim()}`)
+  assert.match(detail, /npm install -g @deepseek-ai\/dsh@0\.1\.5-rc\.1/u,
+    `old-host rejection must include an exact upgrade command:\n${detail.trim()}`)
   assert.doesNotMatch(detail, /ERR_MODULE_NOT_FOUND|Cannot find package/u,
     `old-host rejection must not leak a raw module-resolution failure:\n${detail.trim()}`)
   rmSync(SCRATCH, { recursive: true, force: true })
 }
 
-// ── Block D (dev-only): the checked-in snapshot matches the real tarball ──
+// ── Block D (always): the checked-in snapshot matches the installed host package ──
 {
-  if (!existsSync(REAL_HOST_EXTRACT)) {
-    console.log('host-compat: real host package extract absent — snapshot drift check skipped (dev-only block)')
-  } else {
-    const snapshot = JSON.parse(readFileSync(SNAPSHOT_PATH, 'utf8'))
-    const real = parseExportStatement(REAL_HOST_EXTRACT)
-    const snap = new Set(snapshot.exports)
-    assert.deepEqual(
-      { missingFromSnapshot: [...real].filter(n => !snap.has(n)).sort(), staleInSnapshot: [...snap].filter(n => !real.has(n)).sort() },
-      { missingFromSnapshot: [], staleInSnapshot: [] },
-      `test/fixtures/${SNAPSHOT_PATH.split('/').pop()} no longer matches the real ${snapshot.version} tarball — regenerate it`,
-    )
-    console.log('host-compat: snapshot matches the real host package extract')
-  }
+  const snapshot = JSON.parse(readFileSync(SNAPSHOT_PATH, 'utf8'))
+  const manifest = await import('@deepseek-ai/dsh-llm/package.json', { with: { type: 'json' } })
+  const installedVersion = manifest.default.version
+  assert.equal(installedVersion, snapshot.version,
+    `the resolved @deepseek-ai/dsh-llm is ${installedVersion} but the checked-in snapshot pins ${snapshot.version} — bumping the host line requires regenerating the snapshot and the host-compat expectations together`)
+
+  // The runtime namespace adds `default` to the named surface; the snapshot
+  // records the named exports only, because Block B re-declares `default`.
+  const live = new Set(Object.keys(await import('@deepseek-ai/dsh-llm')))
+  live.delete('default')
+  const snap = new Set(snapshot.exports)
+  assert.deepEqual(
+    { missingFromSnapshot: [...live].filter(n => !snap.has(n)).sort(), staleInSnapshot: [...snap].filter(n => !live.has(n)).sort() },
+    { missingFromSnapshot: [], staleInSnapshot: [] },
+    `test/fixtures/${SNAPSHOT_PATH.split('/').pop()} no longer matches the installed ${installedVersion} package — regenerate it`,
+  )
+  console.log(`host-compat: snapshot matches the installed published dsh-llm ${installedVersion}`)
+}
+
+// ── Block E (always, offline): the entry still links on the REJECTED host line ──
+// The friendly "upgrade the host" message comes from the entry's own version
+// guard, which only runs after the module graph links. If a 0.1.5-only symbol
+// ever enters the entry's static imports, a real 0.1.2 host gets a raw
+// `SyntaxError: does not provide an export named …` instead — exactly the
+// failure mode this repository exists to avoid. Blocks B and C cannot catch
+// that: both build their stub from the 0.1.5 surface.
+{
+  const built = readFileSync(BUILT_ENTRY, 'utf8')
+  const imported = namedImportsFrom(built, '@deepseek-ai/dsh-llm')
+  assert.ok(imported.size > 0, 'no @deepseek-ai/dsh-llm named imports found in lib/index.js — block would pass vacuously')
+
+  const rejected = JSON.parse(readFileSync(REJECTED_SNAPSHOT_PATH, 'utf8'))
+  const rejectedSurface = new Set(rejected.exports)
+  const missing = [...imported.keys()].filter(symbol => !rejectedSurface.has(symbol)).sort()
+  assert.deepEqual(missing, [],
+    `lib/index.js imports ${missing.join(', ')}, absent from the rejected ${rejected.version} host surface — such a host would die at ESM link time with a raw SyntaxError instead of the version guard's upgrade message. Either avoid the import, or drop the promise that ${rejected.version} is rejected cleanly (README + Block C).`)
+  console.log(`host-compat: entry still links on the rejected ${rejected.version} surface (${rejectedSurface.size} exports)`)
 }
 
 console.log('host-compat: export gate + host-surface link fixture OK')

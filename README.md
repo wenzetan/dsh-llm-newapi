@@ -12,9 +12,9 @@ Use your NewAPI gateway in [DeepSeek Harness](https://github.com/deepseek-ai/dee
 | --- | --- | --- |
 | `0.1.1-rc.2` | `0.8.4` | Published; plugin npm `latest` |
 | `0.1.2-rc.1` | `0.8.6-rc.1` | Published; plugin npm `next` |
-| `0.1.5-rc.1` | **`0.8.6-rc.2`** | **Planned RC, not published**; isolated tests of the current source pass, full installation and Web validation remain pending |
+| `0.1.5-rc.1` | **`0.8.6-rc.2`** | **Verified locally, not published yet**; typecheck, tests, build and package-content checks pass, real-host Web validation remains pending |
 
-Plugin `0.8.6-rc.1` rejects the older `0.1.1` host. The isolated results for `0.1.5-rc.1` do not certify an existing plugin release for that host. See the [compatibility assessment (Chinese)](docs/2026-09-10-dsh-0.1.5-rc.1-assessment.md).
+Plugin `0.8.6-rc.2` targets the `0.1.5-rc.1` host line only and rejects the older `0.1.2-rc.1` host with an explicit upgrade message; `0.1.2-rc.1` users stay on plugin `0.8.6-rc.1`. See the [compatibility assessment (Chinese)](docs/2026-09-10-dsh-0.1.5-rc.1-assessment.md).
 
 The next release will remain **`0.8.6-rc.2`**, published to npm `next` and marked Pre-release on GitHub. It will not promote a stable version or move the plugin's `latest` tag. The host and plugin have separate release channels; their respective `latest` versions are not necessarily compatible.
 
@@ -22,7 +22,7 @@ The next release will remain **`0.8.6-rc.2`**, published to npm `next` and marke
 
 You need Node.js, npm and pnpm. Repository CI uses Node.js 24. Install the host with npm, then install the plugin from the npm registry into dsh's `web` profile.
 
-### Published RC pair
+### Published RC pair (dsh `0.1.2-rc.1`)
 
 ```sh
 npm install -g @deepseek-ai/dsh@0.1.2-rc.1
@@ -42,7 +42,7 @@ Choose one pair. `--save-exact` records an exact plugin dependency so a later de
 
 ### New host pair: run only after rc.2 is published
 
-**rc.2 is not available yet.** These are the planned commands. Check that the version exists before installing:
+**rc.2 is not published yet.** These are the planned commands. Check that the version exists before installing:
 
 ```sh
 npm view dsh-llm-newapi@0.8.6-rc.2 version

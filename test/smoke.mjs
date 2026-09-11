@@ -325,7 +325,7 @@ function stubModelsListing() {
   await ctx.plugin(FakeConnection)
 
   // The inject scope ran as soon as the service appeared. Loopback-only
-  // exposure is the connection service's own fence in the 0.1.2-rc.1 line:
+  // exposure is the connection service's own fence in the 0.1.5-rc.1 line:
   // channel registration no longer carries a per-handle authority option.
   assert.equal(registered.length, 1)
   assert.equal(registered[0].channel, '/llm-newapi')
@@ -348,7 +348,10 @@ function stubModelsListing() {
   assert.equal(failure.ok, false)
   assert.match(failure.error.message, /models\.dev catalog fetch failed/)
   assert.match(failure.error.message, /ENETUNREACH/)
-  assert.match(failure.error.message, /enable the proxy/)
+  // The host may already be routing ordinary fetch through its launch
+  // environment proxy, so the remedy must not assume a direct route.
+  assert.match(failure.error.message, /configure a proxy for this plugin/)
+  assert.doesNotMatch(failure.error.message, /direct route/)
 }
 
 // ── Block H: registry-official matches lead when no hint applies ──
@@ -410,7 +413,7 @@ function stubModelsListing() {
   assert.equal(second.official, undefined)
 }
 
-// ── Block F: a dead proxy names the proxy, not the direct route ──
+// ── Block F: a dead proxy names the proxy, not the plugin-proxy remedy ──
 {
   const adapter = new plugin.NewApiAdapter({
     options: () => ({
@@ -434,7 +437,7 @@ function stubModelsListing() {
     (error) => error.code === 'TRANSPORT'
       && error.message.includes('models.dev catalog fetch failed')
       && error.message.includes('the proxy at http://127.0.0.1:1 is unreachable')
-      && !error.message.includes('enable the proxy'),
+      && !error.message.includes('configure a proxy for this plugin'),
   )
 }
 

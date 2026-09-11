@@ -606,13 +606,17 @@ export class NewApiAdapter extends LlmAdapter {
       // Surface the underlying cause (DNS, refused, TLS, timeout) and name
       // the remedy that fits the route that actually failed: a refused
       // connection to the proxy itself is a proxy problem, and telling that
-      // user to "enable the proxy" would point the wrong way.
+      // user to change the proxy setting would point the wrong way.
       const cause = error instanceof Error && error.cause instanceof Error
         ? `: ${error.cause.message}`
         : error instanceof Error ? `: ${error.message}` : ''
+      // Without an explicit plugin proxy the request still rides whatever
+      // routing the host installed (dsh 0.1.5 installs a global proxy
+      // dispatcher at startup), so the diagnostic must not claim the direct
+      // route was tried and failed.
       const remedy = proxyUrl !== undefined
         ? ` — the proxy at ${proxyUrl} is unreachable; check that it is running, or change or disable the proxy setting`
-        : ' — if the direct route cannot reach models.dev, enable the proxy'
+        : ' — check the network path to models.dev, or configure a proxy for this plugin'
       throw new LlmError(
         `models.dev catalog fetch failed${cause}${remedy}`,
         'TRANSPORT',

@@ -2,7 +2,7 @@
 
 [返回 README](../README.zh-CN.md) · [配置指南](configuration.md) · [实现设计](../DESIGN.md)
 
-本文面向维护者。当前包版本为 `0.8.6-rc.1`；下一次目标发布为 **`0.8.6-rc.2`**，用于适配 dsh `0.1.5-rc.1`。本轮保持 RC，不执行正式版晋升。
+本文面向维护者。当前包版本为 `0.8.6-rc.2`，适配 dsh `0.1.5-rc.1` 单宿主线；本地非 Web 验证已完成，真实宿主 Web 验证与发布尚未执行。本轮保持 RC，不执行正式版晋升。
 
 ## 本地构建
 
@@ -62,7 +62,7 @@ npm pack
 5. 用同一 tarball 验证真实宿主启动、设置页加载、凭据与配置保存、模型发现和文本/工具调用。
 6. 更新双语 README 的版本状态、指定版本安装命令和已知限制。
 
-注意 npm 的 prerelease 范围：`>=0.1.2-rc.1` 不会自动接受 `0.1.5-rc.1`。最低版本 guard、peer 元数据与“已验证版本”表是三个不同层面的约束，不能互相替代。详细依据见[本次适配评估](2026-09-10-dsh-0.1.5-rc.1-assessment.md)。
+注意 npm 的 prerelease 范围：`>=0.1.2-rc.1` 不会自动接受 `0.1.5-rc.1`，因此本插件改用 `>=0.1.5-rc.1 <0.1.6` 明确锁定新宿主线。最低版本 guard、peer 元数据与“已验证版本”表是三个不同层面的约束，不能互相替代。详细依据见[本次适配评估](2026-09-10-dsh-0.1.5-rc.1-assessment.md)。
 
 ## 本次发布约定
 
@@ -76,6 +76,12 @@ npm pack
 
 完成适配后再更新包版本与锁文件。候选提交必须通过构建、插件规范检查和真实启动检查，并验证浏览器与网关的实际行为。合入 main 后，从已经确认的提交创建 RC 标签；标签工作流负责打包与发布。**本次不要填写 workflow_dispatch 的 `rc_tag` 晋升输入。**
 
+当前进度：包版本、锁文件、宿主导出快照、CI 固定宿主、最低版本 guard 与生成产物均已更新，本地非 Web 验证（`npm ci`、typecheck、构建、测试、打包与包内容检查）已通过。真实宿主 tarball 安装、Web 启动与浏览器验证仍未执行，因此 rc.2 仍是“本地已验证、待发布”。
+
+锁文件说明：旧锁把 `@deepseek-ai/dsh-*` 固定在 0.1.2-rc.1，与 0.1.5-rc.1 的 peer 要求冲突，npm 直接增量求解会报 `ERESOLVE`。因此本次只替换锁文件中的 dsh 子树（19 个包条目加根条目），其余条目原样保留，再由 `npm install --package-lock-only` 校验一致性——它接受了该结果且未改动依赖版本。这样 `undici`、`zod`、`rolldown`、`postcss` 等与本次迁移无关的依赖都停留在 0.1.2 时期的版本，没有被动升级。
+
+锁文件中另有两类非人为变更需要知道：一是 npm 对旧锁本身就会做的规范化，会移除 `vitest/node_modules/@esbuild/*` 与 `vitest/node_modules/esbuild`（在未改动的旧锁上执行 `npm install` 同样发生，与本次升级无关）；二是 `use-sync-external-store` 被移除，因为 `dsh-client-ui-renderer` 在 0.1.5-rc.1 已不再依赖它，这是升级的正确结果。
+
 发布工作流只有在配置了 `NPM_TOKEN` 时才会发布 npm，因此 GitHub Release 成功不等于 npm 包已可安装。发布后核对：
 
 ```sh
@@ -83,13 +89,13 @@ npm view dsh-llm-newapi@0.8.6-rc.2 version
 npm view dsh-llm-newapi dist-tags --json
 ```
 
-同时检查 Release 的 Pre-release 标记、tarball 内版本和标签提交。只有这些检查完成后，README 才能将 rc.2 从“计划发布”改为“已发布”。
+同时检查 Release 的 Pre-release 标记、tarball 内版本和标签提交。只有这些检查完成后，README 才能将 rc.2 从“本地已验证、待发布”改为“已发布”。
 
 仓库保留了人工晋升正式版的流程，但它不属于本轮操作。该流程要求 main 与待晋升 RC 指向同一提交，再生成稳定版本提交；如果 main 已有新提交，应重新发布并验证新的 RC，不能跳过必需检查。
 
 ## 其他安装来源
 
-需要复现 GitHub 版本时可指定标签：
+需要复现 GitHub 版本时可指定标签。下例使用当前最新的已发布标签 `v0.8.6-rc.1`；rc.2 目前尚未打标签，因此它的 GitHub 安装方式要等标签创建后才可用：
 
 ```sh
 dsh plugin --profile web add "github:wenzetan/dsh-llm-newapi#v0.8.6-rc.1"

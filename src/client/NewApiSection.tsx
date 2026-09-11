@@ -670,6 +670,7 @@ export function NewApiSection(props: NewApiSectionProps): ReactNode {
             )
             : null}
         </div>
+        <p className="newapi-hint">{t('proxyHint')}</p>
         {models.length === 0 ? <p className="newapi-empty">{t('modelsEmpty')}</p> : null}
         {models.map((model, index) => (
           <div key={index} className="newapi-entry">

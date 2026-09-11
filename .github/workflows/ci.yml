@@ -88,7 +88,7 @@ jobs:
           git clone --depth 1 https://github.com/omdsh-dev/dsh-plugin-check /tmp/pc
           # Borrow the checker symlinks from the exact seam this plugin targets;
           # keep the pin even when npm dist-tags advance.
-          npm install -g @deepseek-ai/dsh@0.1.2-rc.1 >/dev/null
+          npm install -g @deepseek-ai/dsh@0.1.5-rc.1 >/dev/null
           cd /tmp/pc
           npm install --no-audit --no-fund --ignore-scripts
           # The built entry imports @deepseek-ai/dsh-tools at runtime
@@ -132,7 +132,7 @@ jobs:
         with:
           node-version: 24
       - name: Install dsh and pnpm
-        run: npm install -g @deepseek-ai/dsh@0.1.2-rc.1 pnpm
+        run: npm install -g @deepseek-ai/dsh@0.1.5-rc.1 pnpm
       - name: Install the packed tarball into a fresh web profile
         run: |
           set -euo pipefail
@@ -201,7 +201,7 @@ jobs:
           echo "authenticated web page ready on :3080"
           # The plugin's browser half is composed into the boot graph: the
           # ClientModuleRegistry serves content-addressed combo URLs under
-          # /plugins/??…&rev=… (0.1.2-rc.1), referenced from the served page's
+          # /plugins/??…&rev=… (0.1.5-rc.1), referenced from the served page's
           # window.__DSH_BOOT__ rows — there is no static client.js path.
           if ! grep -Fq 'dsh-llm-newapi/client.js' "$PAGE"; then
             echo "::error::plugin client bundle absent from the boot page graph"
