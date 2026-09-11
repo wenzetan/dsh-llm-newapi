@@ -6,17 +6,18 @@ Use your NewAPI gateway in [DeepSeek Harness](https://github.com/deepseek-ai/dee
 
 ## Choose a compatible version
 
-**Install the host and plugin as a pair.** Status checked on September 10, 2026; the planned release is listed separately from available releases.
+**Install the host and plugin as a pair.** Status checked on September 11, 2026.
 
 | dsh host | Plugin | Status |
 | --- | --- | --- |
 | `0.1.1-rc.2` | `0.8.4` | Published; plugin npm `latest` |
-| `0.1.2-rc.1` | `0.8.6-rc.1` | Published; plugin npm `next` |
-| `0.1.5-rc.1`, `0.1.5-rc.2` | **`0.8.6-rc.2`** | **Verified locally, not published yet**; typecheck, tests, build and package-content checks pass, real-host Web validation remains pending |
+| `0.1.2-rc.1` | `0.8.6-rc.1` | Published; the last release for that host line |
+| `0.1.5-rc.1`, `0.1.5-rc.2` | `0.8.6-rc.2` | Published; superseded by `0.8.6-rc.3` |
+| `0.1.5-rc.1`, `0.1.5-rc.2` | **`0.8.6-rc.3`** | **Current release**; npm `next`, GitHub Pre-release. Adds the select-all box to the fetched-model picker |
 
-Plugin `0.8.6-rc.2` targets the `0.1.5` host line and rejects the older `0.1.2-rc.1` host with an explicit upgrade message; `0.1.2-rc.1` users stay on plugin `0.8.6-rc.1`. Both `0.1.5-rc.1` and `0.1.5-rc.2` were verified: they ship identical `lib/**` code, and the plugin builds byte-identical output against either. See the [compatibility assessment (Chinese)](docs/2026-09-10-dsh-0.1.5-rc.1-assessment.md).
+Plugin `0.8.6-rc.3` targets the `0.1.5` host line and rejects the older `0.1.2-rc.1` host with an explicit upgrade message; `0.1.2-rc.1` users stay on plugin `0.8.6-rc.1`. Both `0.1.5-rc.1` and `0.1.5-rc.2` were verified: they ship identical `lib/**` code, and the plugin builds byte-identical output against either. See the [compatibility assessment (Chinese)](docs/2026-09-10-dsh-0.1.5-rc.1-assessment.md).
 
-The next release will remain **`0.8.6-rc.2`**, published to npm `next` and marked Pre-release on GitHub. It will not promote a stable version or move the plugin's `latest` tag. The host and plugin have separate release channels; their respective `latest` versions are not necessarily compatible.
+Releases stay on the **pre-release channel**: npm `next` and a GitHub Pre-release. Nothing here promotes a stable version or moves the plugin's `latest` tag, which stays on `0.8.4`. The host and plugin have separate release channels; their respective `latest` versions are not necessarily compatible.
 
 ## Install exact versions
 
@@ -45,10 +46,10 @@ Choose one pair. `--save-exact` records an exact plugin dependency so a later de
 **rc.2 is not published yet.** These are the planned commands. Check that the version exists before installing:
 
 ```sh
-npm view dsh-llm-newapi@0.8.6-rc.2 version
+npm view dsh-llm-newapi@0.8.6-rc.3 version
 npm install -g @deepseek-ai/dsh@0.1.5-rc.2
 npm install -g pnpm
-dsh plugin --profile web add --save-exact dsh-llm-newapi@0.8.6-rc.2
+dsh plugin --profile web add --save-exact dsh-llm-newapi@0.8.6-rc.3
 ```
 
 ### Check that the plugin is enabled

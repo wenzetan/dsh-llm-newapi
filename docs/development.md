@@ -2,7 +2,7 @@
 
 [返回 README](../README.zh-CN.md) · [配置指南](configuration.md) · [实现设计](../DESIGN.md)
 
-本文面向维护者。当前包版本为 `0.8.6-rc.2`，适配 dsh `0.1.5` 单宿主线；本地非 Web 验证已完成，真实宿主 Web 验证与发布尚未执行。本轮保持 RC，不执行正式版晋升。
+本文面向维护者。当前包版本为 `0.8.6-rc.3`，适配 dsh `0.1.5` 单宿主线。rc.2 已发布；rc.3 增加拉取模型时的全选勾选框。本轮保持 RC，不执行正式版晋升。
 
 开发依赖与 CI 的固定宿主都使用 **`0.1.5-rc.2`**，而 peer 下限与运行时最低版本仍是 **`0.1.5-rc.1`**。这两个数字不同是有意的：pin 表示我们构建和验证所针对的版本，下限表示插件仍愿意接受的最低版本。`0.1.5-rc.1` 与 `0.1.5-rc.2` 发布的是同一份 `lib/**` 代码，插件在两者下构建出的产物逐字节相同，因此保留较低的下限没有代价。若将来某个补丁版本改变了导出面，`surfaceSharedBy` 不再包含它，门禁会失败——此时应按下文流程处理，而不是直接抬低下限。
 
@@ -79,7 +79,7 @@ npm pack
 
 | 项目 | 要求 |
 | --- | --- |
-| 包版本与标签 | `0.8.6-rc.2` / `v0.8.6-rc.2` |
+| 包版本与标签 | `0.8.6-rc.3` / `v0.8.6-rc.3` |
 | GitHub Release | Pre-release |
 | npm dist-tag | `next` |
 | npm / Git `latest` | 继续保持 `0.8.4` |
@@ -87,7 +87,9 @@ npm pack
 
 完成适配后再更新包版本与锁文件。候选提交必须通过构建、插件规范检查和真实启动检查，并验证浏览器与网关的实际行为。合入 main 后，从已经确认的提交创建 RC 标签；标签工作流负责打包与发布。**本次不要填写 workflow_dispatch 的 `rc_tag` 晋升输入。**
 
-当前进度：包版本、锁文件、宿主导出快照、CI 固定宿主、最低版本 guard 与生成产物均已更新，本地非 Web 验证（`npm ci`、typecheck、构建、测试、打包与包内容检查）已通过。真实宿主 tarball 安装、Web 启动与浏览器验证仍未执行，因此 rc.2 仍是“本地已验证、待发布”。
+当前进度：0.1.5 适配已随 `0.8.6-rc.2` 发布，CI 的 build、plugin-check 与 boot 三个任务在 main 和标签上都已通过——真实宿主启动检查覆盖了 tarball 安装、浏览器认证、客户端加载清单与自有 RPC 通道。`0.8.6-rc.3` 在其上增加拉取模型时的全选勾选框（仅浏览器半边，`lib/index.js` 未变）。
+
+关于 RPC 通道的一个坑：0.1.5 宿主线上 `connection.rpc.handle()` 不可用，它内部的 effect 会抛 `cannot get property "webServer" without inject` 并被吞掉，导致通道静默缺失、浏览器撞上 405。插件改为把自身作用域作为 owner 传给 `connection.register(owner, channel, handler)`。细节见 [DESIGN](DESIGN.md)；单元测试的替身已复现该守卫，boot 检查是最终防线。
 
 锁文件说明：旧锁把 `@deepseek-ai/dsh-*` 固定在 0.1.2-rc.1，与 0.1.5-rc.1 的 peer 要求冲突，npm 直接增量求解会报 `ERESOLVE`。因此本次只替换锁文件中的 dsh 子树（19 个包条目加根条目），其余条目原样保留，再由 `npm install --package-lock-only` 校验一致性——它接受了该结果且未改动依赖版本。这样 `undici`、`zod`、`rolldown`、`postcss` 等与本次迁移无关的依赖都停留在 0.1.2 时期的版本，没有被动升级。
 
@@ -96,7 +98,7 @@ npm pack
 发布工作流只有在配置了 `NPM_TOKEN` 时才会发布 npm，因此 GitHub Release 成功不等于 npm 包已可安装。发布后核对：
 
 ```sh
-npm view dsh-llm-newapi@0.8.6-rc.2 version
+npm view dsh-llm-newapi@0.8.6-rc.3 version
 npm view dsh-llm-newapi dist-tags --json
 ```
 
