@@ -6,57 +6,61 @@ Use your NewAPI gateway in [DeepSeek Harness](https://github.com/deepseek-ai/dee
 
 ## Choose a compatible version
 
-**Install the host and plugin as a pair.** Status checked on September 11, 2026.
+**Install the host and plugin as a pair.** Status checked on September 24, 2026.
 
-| dsh host | Plugin | Status |
-| --- | --- | --- |
-| `0.1.1-rc.2` | `0.8.4` | Published; plugin npm `latest` |
-| `0.1.2-rc.1` | `0.8.6-rc.1` | Published; the last release for that host line |
-| `0.1.5-rc.1`, `0.1.5-rc.2` | `0.8.6-rc.2` | Published; superseded by `0.8.6-rc.3` |
-| `0.1.5-rc.1`, `0.1.5-rc.2` | **`0.8.6-rc.3`** | **Current release**; npm `next`, GitHub Pre-release. Adds the select-all box to the fetched-model picker |
+| dsh host | Plugin | npm channel | Status |
+| --- | --- | --- | --- |
+| `0.1.5-rc.3` | `0.1.5-rc.3-v0.1` | `latest` | Published, GitHub Pre-release |
+| **`0.1.7-rc.1`** | **`0.1.7-rc.1-v0.1`** | `next` | **Current release**, GitHub Pre-release |
 
-Plugin `0.8.6-rc.3` targets the `0.1.5` host line and rejects the older `0.1.2-rc.1` host with an explicit upgrade message; `0.1.2-rc.1` users stay on plugin `0.8.6-rc.1`. Both `0.1.5-rc.1` and `0.1.5-rc.2` were verified: they ship identical `lib/**` code, and the plugin builds byte-identical output against either. See the [compatibility assessment (Chinese)](docs/2026-09-10-dsh-0.1.5-rc.1-assessment.md).
+### Version scheme
 
-Releases stay on the **pre-release channel**: npm `next` and a GitHub Pre-release. Nothing here promotes a stable version or moves the plugin's `latest` tag, which stays on `0.8.4`. The host and plugin have separate release channels; their respective `latest` versions are not necessarily compatible.
+The plugin version follows the upstream host: `<dsh version>-v<plugin revision>`. Only the last segment is this plugin's own revision:
+
+| Case | dsh version | Plugin version (npm) | Git tag / Release |
+| --- | --- | --- | --- |
+| Upstream RC | `0.1.7-rc.1` | `0.1.7-rc.1-v0.1` | `v0.1.7-rc.1-v0.1` |
+| Later plugin change on the same host line | `0.1.7-rc.1` | `0.1.7-rc.1-v0.2` | `v0.1.7-rc.1-v0.2` |
+| Upstream stable | `0.1.7` | `0.1.7-v0.1` | `v0.1.7-v0.1` |
+| Host line changes (revision restarts) | `0.1.7-rc.2` | `0.1.7-rc.2-v0.1` | `v0.1.7-rc.2-v0.1` |
+
+- npm forbids a leading `v` in the version field, so the package reads `0.1.7-rc.1-v0.1` while the Git tag and GitHub Release use `v0.1.7-rc.1-v0.1`.
+- **Channel split**: npm `latest` points at the 0.1.5-line adaptation (that host line stays rc-only and will never produce a stable tag); npm `next` at the newest preview. When a stable `0.1.7` line appears (`v0.1.7-v0.1`), it takes over `latest`.
+- The older **`0.8.x` series** (dsh `0.1.1-rc.2` / `0.1.2-rc.1` host lines) had its tags removed and is marked deprecated on npm.
+
+### Compatibility and upgrades
+
+Plugin `0.1.7-rc.1-v0.1` supports the **dsh `0.1.7-rc.1` line** and rejects the `0.1.5` host with an explicit upgrade message; `0.1.5-rc.3` users run `0.1.5-rc.3-v0.1`. Compatibility is keyed to the host line rather than one patch: a later `0.1.7-rc` cut is covered as long as its export surface matches — `npm run test:host` compares the installed surface against the checked-in one and fails loudly when it does not, instead of assuming. `0.1.7` replaced the settings architecture (plugin configuration now projects from the profile patch with volatile fields), so this is not a pure dependency bump: see the [compatibility assessment (Chinese)](docs/2026-09-24-dsh-0.1.7-rc.1-assessment.md).
+
+Both versions are GitHub Pre-releases (the plugin has no stable release yet). The host and plugin have separate release channels; their respective `latest` versions are not necessarily compatible — pin exact versions from the table above.
 
 ## Install exact versions
 
 You need Node.js, npm and pnpm. Repository CI uses Node.js 24. Install the host with npm, then install the plugin from the npm registry into dsh's `web` profile.
 
-### Published RC pair (dsh `0.1.2-rc.1`)
+### Current host pair (dsh `0.1.7-rc.1`)
 
 ```sh
-npm install -g @deepseek-ai/dsh@0.1.2-rc.1
+npm install -g @deepseek-ai/dsh@0.1.7-rc.1
 npm install -g pnpm
-dsh plugin --profile web add --save-exact dsh-llm-newapi@0.8.6-rc.1
+dsh plugin --profile web add --save-exact dsh-llm-newapi@0.1.7-rc.1-v0.1
 ```
 
-### Pair for the older host
+### Previous host pair (dsh `0.1.5-rc.3`)
 
 ```sh
-npm install -g @deepseek-ai/dsh@0.1.1-rc.2
+npm install -g @deepseek-ai/dsh@0.1.5-rc.3
 npm install -g pnpm
-dsh plugin --profile web add --save-exact dsh-llm-newapi@0.8.4
+dsh plugin --profile web add --save-exact dsh-llm-newapi@0.1.5-rc.3-v0.1
 ```
 
 Choose one pair. `--save-exact` records an exact plugin dependency so a later dependency update does not switch versions automatically. Use `dsh plugin` to manage the profile; installing `dsh-llm-newapi` globally by itself does not register it there.
-
-### New host pair: run only after rc.2 is published
-
-**rc.2 is not published yet.** These are the planned commands. Check that the version exists before installing:
-
-```sh
-npm view dsh-llm-newapi@0.8.6-rc.3 version
-npm install -g @deepseek-ai/dsh@0.1.5-rc.2
-npm install -g pnpm
-dsh plugin --profile web add --save-exact dsh-llm-newapi@0.8.6-rc.3
-```
 
 ### Check that the plugin is enabled
 
 Open `$DSH_HOME/profiles/web/package.json`. With no `DSH_HOME` override, this is `.dsh/profiles/web/package.json` under your home directory.
 
-Ensure `dsh.profile.bundles` contains `dsh-llm-newapi`. Host `0.1.5` registers installed bundle plugins automatically. On an older host or an existing profile where the entry is missing, append it once and preserve the other entries. This is a JSON fragment to check, **not a replacement for the entire file**:
+Ensure `dsh.profile.bundles` contains `dsh-llm-newapi`. Recent dsh hosts register installed bundle plugins automatically. On an older host or an existing profile where the entry is missing, append it once and preserve the other entries. This is a JSON fragment to check, **not a replacement for the entire file**:
 
 ```json
 {
@@ -103,9 +107,9 @@ Model discovery queries your gateway for available models. models.dev is a publi
 
 ## Upgrading and troubleshooting
 
-Check the version table, stop dsh Web and back up your dsh configuration and session data before upgrading. Install the target host and exact plugin version, keep the existing bundle entry and restart. The plugin retains the `llm-newapi` settings namespace and `newapi` credential reference.
+Check the version table, stop dsh Web and back up your dsh configuration and session data before upgrading. Install the target host and exact plugin version, keep the existing bundle entry and restart. The plugin retains the `newapi` credential reference; configuration now persists through the profile's Cordis patch (see [configuration](docs/configuration.md)).
 
-Host `0.1.5` migrates session data; older hosts cannot directly read migrated sessions. Reinstalling an older npm version alone is not a complete rollback. See the [upstream migration guide](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.1.5-rc.1/packages/session/session-format-v2-to-v3/README.md).
+Host `0.1.7` migrates sessions from V3 to V4 (tool results become tool-role messages, message sources are renamed); older hosts cannot directly read migrated sessions. Reinstalling an older npm version alone is not a complete rollback. See the [upstream migration guide](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.1.7-rc.1/packages/session/session-format-v3-to-v4/README.md).
 
 | Symptom | Check first |
 | --- | --- |
@@ -113,7 +117,7 @@ Host `0.1.5` migrates session data; older hosts cannot directly read migrated se
 | Missing credential | Enter and save the key in NewAPI settings; the plugin does not read `NEWAPI_API_KEY` |
 | Discovery fails | The `/v1` base URL, API key and gateway support for `/models` |
 | Empty model list | Name-based filtering; manually add a model only if it supports chat-completions |
-| models.dev download fails | Network and proxy settings; the plugin proxy applies to this download, while host `0.1.5` also applies environment proxy settings |
+| models.dev download fails | Network and proxy settings; the plugin proxy applies to this download, while dsh also applies environment proxy settings through `dsh-http-proxy` |
 | Missing-peer warnings during install | dsh supplies host packages. If installation and startup succeed, do not install duplicate host packages just to silence these warnings; investigate actual startup errors separately |
 
 ## Documentation
@@ -123,6 +127,7 @@ The detailed guides below are currently in Chinese:
 - [Configuration and troubleshooting](docs/configuration.md): fields, model matching, proxies and save failures.
 - [Development and RC releases](docs/development.md): builds, test coverage and release checks.
 - [Design](DESIGN.md): source map, data flow and implementation decisions.
-- [0.1.5-rc.1 assessment](docs/2026-09-10-dsh-0.1.5-rc.1-assessment.md): version inventory and pending work.
+- [0.1.7-rc.1 assessment](docs/2026-09-24-dsh-0.1.7-rc.1-assessment.md): version inventory, breaking changes and verification.
+- [0.1.5-rc.1 assessment](docs/2026-09-10-dsh-0.1.5-rc.1-assessment.md): historical snapshot.
 
 See [GitHub Releases](https://github.com/wenzetan/dsh-llm-newapi/releases) for published changes and downloadable packages.
