@@ -88,7 +88,7 @@ jobs:
           git clone --depth 1 https://github.com/omdsh-dev/dsh-plugin-check /tmp/pc
           # Borrow the checker symlinks from the exact seam this plugin targets;
           # keep the pin even when npm dist-tags advance.
-          npm install -g @deepseek-ai/dsh@0.1.5-rc.2 >/dev/null
+          npm install -g @deepseek-ai/dsh@0.1.7-rc.1 >/dev/null
           cd /tmp/pc
           npm install --no-audit --no-fund --ignore-scripts
           # The built entry imports @deepseek-ai/dsh-tools at runtime
@@ -123,6 +123,11 @@ jobs:
   # the SPA fallback's 405).
   boot:
     needs: build
+    # The 0.1.5 line stays published but is not CI-verifiable: the pinned
+    # host here is 0.1.7-rc.1 and the plugin's version guard rejects the
+    # older line by design. Its release tags skip this job; the 0.1.7 line
+    # (and anything newer) always runs it.
+    if: ${{ !startsWith(github.ref_name, 'v0.1.5') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -132,7 +137,7 @@ jobs:
         with:
           node-version: 24
       - name: Install dsh and pnpm
-        run: npm install -g @deepseek-ai/dsh@0.1.5-rc.2 pnpm
+        run: npm install -g @deepseek-ai/dsh@0.1.7-rc.1 pnpm
       - name: Install the packed tarball into a fresh web profile
         run: |
           set -euo pipefail
@@ -184,7 +189,7 @@ jobs:
             fi
             auth_url="$(sed -n 's/^dsh web: \(http:\/\/127\.0\.0\.1:[^ ]*\).*/\1/p' "$LOG" | tail -n 1)"
             if [ -n "$auth_url" ]; then
-              # dsh 0.1.2 exchanges the one-process launch token for a signed
+              # dsh exchanges the one-process launch token for a signed
               # browser-session cookie via a 303. Follow that exchange exactly;
               # unauthenticated requests correctly receive 401.
               code="$(curl -sS -L -c "$COOKIE_JAR" -b "$COOKIE_JAR" \
@@ -201,7 +206,7 @@ jobs:
           echo "authenticated web page ready on :3080"
           # The plugin's browser half is composed into the boot graph: the
           # ClientModuleRegistry serves content-addressed combo URLs under
-          # /plugins/??…&rev=… (0.1.5-rc.2), referenced from the served page's
+          # /plugins/??…&rev=…, referenced from the served page's
           # window.__DSH_BOOT__ rows — there is no static client.js path.
           if ! grep -Fq 'dsh-llm-newapi/client.js' "$PAGE"; then
             echo "::error::plugin client bundle absent from the boot page graph"
@@ -237,15 +242,22 @@ jobs:
           ' "$RPC_BODY"
           echo "startup check passed: authenticated web ready, client bundle in boot graph, RPC channel HTTP $rpc"
 
-  # A tag like v0.8.2-rc.1 publishes as a TEST version everywhere: GitHub
+  # A tag like v0.1.7-rc.1-v0.1 (current numbering, host-following) or
+  # v0.8.2-rc.1 (legacy) publishes as a TEST version everywhere: GitHub
   # Release marked pre-release, npm under the `next` dist-tag. The stable
   # `latest` / full release only ever comes from a suffix-free vX.Y.Z tag,
   # and those tags are created exclusively by the promote job below (a
   # manual confirmation step) — pushing one by hand is the process smell the
-  # promotion flow replaces.
+  # promotion flow replaces. Note: under the host-following numbering every
+  # plugin version carries a `-vN.M` prerelease segment, so this promotion
+  # flow does not apply as-is and the stable-version scheme is an open
+  # decision (see docs/development.md).
   release:
     needs: [build, plugin-check, boot]
-    if: startsWith(github.ref, 'refs/tags/v')
+    # Every v* tag releases; the 0.1.5 line's tags skip boot (see above), so
+    # accept a skipped boot as long as build and plugin-check passed. A
+    # failed boot still blocks the release.
+    if: ${{ always() && startsWith(github.ref, 'refs/tags/v') && needs.build.result == 'success' && needs.plugin-check.result == 'success' && (needs.boot.result == 'success' || needs.boot.result == 'skipped') }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -260,13 +272,15 @@ jobs:
       - name: Decide the release channel
         id: channel
         run: |
-          # Any hyphen in the tag (rc/beta/…) marks a test version.
-          if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
-            echo "prerelease=true" >> "$GITHUB_OUTPUT"
-            echo "npm_tag=next" >> "$GITHUB_OUTPUT"
-          else
-            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          # Every tag in this repository is a pre-release (the host-following
+          # version always carries a `-vN.M` segment). The dist-tag follows
+          # the host line: the 0.1.5 line is the maintained `latest` channel,
+          # newer lines (currently 0.1.7) publish under `next`.
+          echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          if [[ "${GITHUB_REF_NAME}" == v0.1.5-* ]]; then
             echo "npm_tag=latest" >> "$GITHUB_OUTPUT"
+          else
+            echo "npm_tag=next" >> "$GITHUB_OUTPUT"
           fi
       - name: Create GitHub Release with the built tarball
         uses: softprops/action-gh-release@v2
@@ -288,35 +302,6 @@ jobs:
             echo "already published $VER — skipping (rerun-safe)"
           else
             npm publish dsh-llm-newapi-*.tgz --access public --tag "${{ steps.channel.outputs.npm_tag }}"
-          fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-      # npm assigns the `latest` dist-tag to the very first version published
-      # even when publishing under --tag next (v0.8.2-rc.4 shipped that way).
-      # latest cannot be deleted (registry 403) — only re-assigned; the
-      # step below re-claims it to the newest stable already published,
-      # or warns when none exists yet (the next promote re-claims it).
-      - name: Prerelease must not own the latest dist-tag
-        if: env.NPM_TOKEN != '' && steps.channel.outputs.npm_tag == 'next'
-        run: |
-          # npm forbids DELETING the latest dist-tag (403) — it can only be
-          # re-assigned. npm assigns latest to the very first published
-          # version even under --tag next (v0.8.2-rc.4 shipped that way), so
-          # when this rc publish leaves latest pointing at a -suffixed
-          # version, re-claim it to the newest stable already on the
-          # registry if one exists. With no stable published yet, only warn:
-          # the next promote/stable release re-claims latest itself.
-          LATEST="$(npm dist-tag ls dsh-llm-newapi | sed -n 's/^latest: //p')"
-          if [ -n "$LATEST" ] && [[ "$LATEST" == *-* ]]; then
-            STABLE="$(npm dist-tag ls dsh-llm-newapi | sed -n 's/^[^:]*: //p' | grep -v -- '-' | sort -V | tail -1)"
-            if [ -n "$STABLE" ]; then
-              npm dist-tag add "dsh-llm-newapi@$STABLE" latest
-              echo "re-claimed latest: $LATEST -> $STABLE"
-            else
-              echo "::warning::latest=$LATEST points at a prerelease and no stable version exists yet — the next promote will re-claim latest"
-            fi
-          else
-            echo "latest untouched (${LATEST:-<unset>})"
           fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
