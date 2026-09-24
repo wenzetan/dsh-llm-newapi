@@ -6,12 +6,18 @@
 
 ## 先选对版本
 
-**宿主版本与插件版本需要配套。** 下表状态核对于 2026-09-24。
+**宿主版本与插件版本需要配套。** 状态核对于 2026-09-24。
 
-| dsh 宿主 | 插件版本 | npm 通道 | 状态 |
+| dsh 宿主 | 插件版本线 | npm 通道 | 状态 |
 | --- | --- | --- | --- |
-| `0.1.5-rc.3` | `0.1.5-rc.3-v0.1` | `latest` | 已发布，GitHub Pre-release |
-| **`0.1.7-rc.1`** | **`0.1.7-rc.1-v0.1`** | `next` | **当前版本**，GitHub Pre-release |
+| `0.1.5-rc.3` | `0.1.5-rc.3-v0.x` | `latest` | 已发布 |
+| **`0.1.7-rc.1`** | **`0.1.7-rc.1-v0.x`** | `next` | **当前开发线** |
+
+同一宿主线上的版本号只递增最后一段（`-v0.1` → `-v0.2` → …），因此上表用 `v0.x` 表示该线；查询各通道当前指向的精确版本：
+
+```sh
+npm view dsh-llm-newapi dist-tags --json
+```
 
 ### 版本号规则
 
@@ -30,31 +36,31 @@
 
 ### 兼容性与升级
 
-`0.1.7-rc.1-v0.1` 支持 **dsh `0.1.7-rc.1` 宿主线**，并会明确拒绝 `0.1.5` 宿主并提示升级；`0.1.5-rc.3` 用户使用 `0.1.5-rc.3-v0.1`。兼容性以宿主线而非单个补丁号为准：`0.1.7-rc` 线内的接缝面是固定的，该线后续再切 RC 同样适用——只要导出面一致；`npm run test:host` 会把已安装的导出面与入库快照逐一比对，不一致时直接报错，而不是默认放行。`0.1.7` 更换了设置架构（插件配置由 profile patch 派生并标记为 volatile），因此这不是一次纯依赖升级：详见[适配评估](docs/2026-09-24-dsh-0.1.7-rc.1-assessment.md)。
+`0.1.7-rc.1-v0.x` 支持 **dsh `0.1.7-rc.1` 宿主线**，并会明确拒绝 `0.1.5` 宿主并提示升级；`0.1.5-rc.3` 用户使用 `0.1.5-rc.3-v0.x`。兼容性以宿主线而非单个补丁号为准：`0.1.7-rc` 线内的接缝面是固定的，该线后续再切 RC 同样适用——只要导出面一致；`npm run test:host` 会把已安装的导出面与入库快照逐一比对，不一致时直接报错，而不是默认放行。`0.1.7` 更换了设置架构（插件配置由 profile patch 派生并标记为 volatile），因此这不是一次纯依赖升级：详见[适配评估](docs/2026-09-24-dsh-0.1.7-rc.1-assessment.md)。
 
-两个版本都是 GitHub Pre-release（插件当前没有正式版）。不要假设 dsh 与插件各自的 `latest` 能配套使用——请按上表精确指定版本。
+两个版本线都是 GitHub Pre-release（插件当前没有正式版）。不要假设 dsh 与插件各自的 `latest` 能配套使用——请按上表选择宿主线，并用 `dist-tags` 查询当前精确版本。
 
 ## 安装：使用指定版本
 
 需要 Node.js、npm 和 pnpm；本仓库 CI 使用 Node.js 24。宿主通过 npm 安装，插件从 npm registry 安装到 dsh 的 `web` profile。
 
-### 当前宿主组合（dsh `0.1.7-rc.1`）
+### 当前宿主组合（dsh `0.1.7-rc.1`，npm `next`）
 
 ```sh
 npm install -g @deepseek-ai/dsh@0.1.7-rc.1
 npm install -g pnpm
-dsh plugin --profile web add --save-exact dsh-llm-newapi@0.1.7-rc.1-v0.1
+dsh plugin --profile web add --save-exact "dsh-llm-newapi@$(npm view dsh-llm-newapi dist-tags.next)"
 ```
 
-### 上一个宿主组合（dsh `0.1.5-rc.3`）
+### 上一个宿主组合（dsh `0.1.5-rc.3`，npm `latest`）
 
 ```sh
 npm install -g @deepseek-ai/dsh@0.1.5-rc.3
 npm install -g pnpm
-dsh plugin --profile web add --save-exact dsh-llm-newapi@0.1.5-rc.3-v0.1
+dsh plugin --profile web add --save-exact "dsh-llm-newapi@$(npm view dsh-llm-newapi dist-tags.latest)"
 ```
 
-选择一组执行即可。`--save-exact` 将插件依赖记录为精确版本，避免后续依赖更新时自动切换版本。插件安装使用 `dsh plugin`，它会管理对应 profile；单独全局安装 `dsh-llm-newapi` 不会完成这个步骤。
+选择一组执行即可；命令通过 `dist-tags` 取该通道当前版本，因此不需要手抄版本号。`--save-exact` 将插件依赖记录为精确版本，避免后续依赖更新时自动切换版本。插件安装使用 `dsh plugin`，它会管理对应 profile；单独全局安装 `dsh-llm-newapi` 不会完成这个步骤。
 
 ### 确认插件已启用
 

@@ -8,10 +8,16 @@ Use your NewAPI gateway in [DeepSeek Harness](https://github.com/deepseek-ai/dee
 
 **Install the host and plugin as a pair.** Status checked on September 24, 2026.
 
-| dsh host | Plugin | npm channel | Status |
+| dsh host | Plugin version line | npm channel | Status |
 | --- | --- | --- | --- |
-| `0.1.5-rc.3` | `0.1.5-rc.3-v0.1` | `latest` | Published, GitHub Pre-release |
-| **`0.1.7-rc.1`** | **`0.1.7-rc.1-v0.1`** | `next` | **Current release**, GitHub Pre-release |
+| `0.1.5-rc.3` | `0.1.5-rc.3-v0.x` | `latest` | Published |
+| **`0.1.7-rc.1`** | **`0.1.7-rc.1-v0.x`** | `next` | **Current line** |
+
+On a host line only the last segment increments (`-v0.1` → `-v0.2` → …), so the table names the line as `v0.x`. Query the exact version each channel currently points at:
+
+```sh
+npm view dsh-llm-newapi dist-tags --json
+```
 
 ### Version scheme
 
@@ -30,31 +36,31 @@ The plugin version follows the upstream host: `<dsh version>-v<plugin revision>`
 
 ### Compatibility and upgrades
 
-Plugin `0.1.7-rc.1-v0.1` supports the **dsh `0.1.7-rc.1` line** and rejects the `0.1.5` host with an explicit upgrade message; `0.1.5-rc.3` users run `0.1.5-rc.3-v0.1`. Compatibility is keyed to the host line rather than one patch: a later `0.1.7-rc` cut is covered as long as its export surface matches — `npm run test:host` compares the installed surface against the checked-in one and fails loudly when it does not, instead of assuming. `0.1.7` replaced the settings architecture (plugin configuration now projects from the profile patch with volatile fields), so this is not a pure dependency bump: see the [compatibility assessment (Chinese)](docs/2026-09-24-dsh-0.1.7-rc.1-assessment.md).
+Plugin `0.1.7-rc.1-v0.x` supports the **dsh `0.1.7-rc.1` line** and rejects the `0.1.5` host with an explicit upgrade message; `0.1.5-rc.3` users run `0.1.5-rc.3-v0.x`. Compatibility is keyed to the host line rather than one patch: a later `0.1.7-rc` cut is covered as long as its export surface matches — `npm run test:host` compares the installed surface against the checked-in one and fails loudly when it does not, instead of assuming. `0.1.7` replaced the settings architecture (plugin configuration now projects from the profile patch with volatile fields), so this is not a pure dependency bump: see the [compatibility assessment (Chinese)](docs/2026-09-24-dsh-0.1.7-rc.1-assessment.md).
 
-Both versions are GitHub Pre-releases (the plugin has no stable release yet). The host and plugin have separate release channels; their respective `latest` versions are not necessarily compatible — pin exact versions from the table above.
+Both lines are GitHub Pre-releases (the plugin has no stable release yet). The host and plugin have separate release channels; their respective `latest` versions are not necessarily compatible — pick a host line from the table and query `dist-tags` for the exact version.
 
 ## Install exact versions
 
 You need Node.js, npm and pnpm. Repository CI uses Node.js 24. Install the host with npm, then install the plugin from the npm registry into dsh's `web` profile.
 
-### Current host pair (dsh `0.1.7-rc.1`)
+### Current host pair (dsh `0.1.7-rc.1`, npm `next`)
 
 ```sh
 npm install -g @deepseek-ai/dsh@0.1.7-rc.1
 npm install -g pnpm
-dsh plugin --profile web add --save-exact dsh-llm-newapi@0.1.7-rc.1-v0.1
+dsh plugin --profile web add --save-exact "dsh-llm-newapi@$(npm view dsh-llm-newapi dist-tags.next)"
 ```
 
-### Previous host pair (dsh `0.1.5-rc.3`)
+### Previous host pair (dsh `0.1.5-rc.3`, npm `latest`)
 
 ```sh
 npm install -g @deepseek-ai/dsh@0.1.5-rc.3
 npm install -g pnpm
-dsh plugin --profile web add --save-exact dsh-llm-newapi@0.1.5-rc.3-v0.1
+dsh plugin --profile web add --save-exact "dsh-llm-newapi@$(npm view dsh-llm-newapi dist-tags.latest)"
 ```
 
-Choose one pair. `--save-exact` records an exact plugin dependency so a later dependency update does not switch versions automatically. Use `dsh plugin` to manage the profile; installing `dsh-llm-newapi` globally by itself does not register it there.
+Choose one pair; the command resolves the channel's current version through `dist-tags`, so no version needs to be copied by hand. `--save-exact` records an exact plugin dependency so a later dependency update does not switch versions automatically. Use `dsh plugin` to manage the profile; installing `dsh-llm-newapi` globally by itself does not register it there.
 
 ### Check that the plugin is enabled
 
