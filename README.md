@@ -1,3 +1,15 @@
+> 🚧 **Archived Notice / 归档通知**
+>
+> **English:**  
+> This repository is deprecated and will be archived soon.  
+> New installations should use the native **Custom Provider** feature provided by **dsh desktop** instead.  
+> Existing users should migrate their provider configurations before the repository is archived.
+>
+> **中文：**  
+> 本仓库已停止功能开发，并计划近期归档。  
+> 新用户请直接使用 **dsh desktop 原生 Custom Provider（自定义 Provider）** 功能，不再建议安装或使用本项目。  
+> 已有用户请在仓库归档前迁移现有 Provider 配置数据。
+
 # dsh-llm-newapi
 
 **English** | [中文](README.zh-CN.md)
