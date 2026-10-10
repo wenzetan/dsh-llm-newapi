@@ -1,7 +1,7 @@
 > 🚧 **Archived Notice / 归档通知**
 >
 > **English:**  
-> This repository is no longer maintained and will be archived.  
+> This repository is no longer maintained and is now archived (read-only).  
 > The author's setup has moved from NewAPI to OmniRoute. The plugin capabilities the two gateways need have diverged: implementing OmniRoute's needs in this project would risk conflicting with the NewAPI-facing behaviour, and would add maintenance cost — so this project stops at its last release.  
 > The last published version is `0.2.0-rc.2-v0.1` (dsh `0.2.0-rc.2`). It keeps working against that pinned host, but there will be no further fixes, releases or new-host support.
 >
