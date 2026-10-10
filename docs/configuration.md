@@ -94,7 +94,7 @@ defaultReasoningEffort: medium
 | 插件设置页中的代理 | 显式覆盖 models.dev 参数下载，不直接改动网关请求的代理配置 |
 | dsh 的启动环境代理 | 宿主通过 `dsh-http-proxy` 安装全局 dispatcher 路由普通 fetch，包括网关请求及未指定插件代理的 models.dev 下载 |
 
-因此，“关闭插件代理”不等于强制直连。新版宿主仍可能依据 `HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY`、`NO_PROXY` 路由请求，详见[上游代理说明](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.1.7-rc.1/packages/util/http-proxy/README.zh.md)。设置页已把这一点写在代理开关下方；下载失败时插件也不再声称走的是直连路径，而是提示检查到 models.dev 的网络路径，或为本插件单独配置代理。
+因此，“关闭插件代理”不等于强制直连。新版宿主仍可能依据 `HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY`、`NO_PROXY` 路由请求，详见[上游代理说明](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.0-rc.2/packages/util/http-proxy/README.zh.md)。设置页已把这一点写在代理开关下方；下载失败时插件也不再声称走的是直连路径，而是提示检查到 models.dev 的网络路径，或为本插件单独配置代理。
 
 ## 常见故障
 

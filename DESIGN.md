@@ -2,7 +2,7 @@
 
 [中文使用指南](README.zh-CN.md) · [配置参考](docs/configuration.md) · [开发与发布](docs/development.md)
 
-本文描述当前代码，不作为历史开发日志。当前代码、构建依赖和 CI 均针对 dsh `0.1.7-rc.1`，只支持 0.1.7 这条宿主线（下限 `0.1.7-rc.1`）；旧宿主行为与后续验证见[适配评估](docs/2026-09-24-dsh-0.1.7-rc.1-assessment.md)。
+本文描述当前代码，不作为历史开发日志。当前代码、构建依赖和 CI 均针对 dsh `0.2.0-rc.2`，只支持 0.2.0 这条宿主线（下限 `0.2.0-rc.2`）；旧宿主行为与后续验证见[适配评估](docs/2026-10-04-dsh-0.2.0-rc.2-assessment.md)。
 
 ## 插件负责什么
 
@@ -43,7 +43,7 @@
 
 插件加载时注册供应商、适配器和模型发现处理器。settings 或 connection 服务稍后就绪时，通过 `ctx.inject` 声明自带设置页（`settings.configure({ auto: false })`）并安装 RPC，避免因加载顺序而漏注册。注册和样式等资源随对应的 Cordis 作用域释放。
 
-自有 RPC 通道的注册方式需要单独说明：0.1.7 宿主线上 `connection.rpc.handle(channel, handler)` 仍不可用。它的 `rpc` getter 捕获 `this.ctx`，而该上下文是 connection 服务自身的作用域，没有注入 `webServer`；`handle` 内部最终求值 `owner.webServer.register(route)`，cordis 抛出 `cannot get property "webServer" without inject`，异常又被 effect 吞掉，于是通道静默缺失，浏览器只能撞上 SPA fallback 的 405。插件改为注入 `connection` 与 `webServer`，并把自身作用域作为 owner 传给 connection 服务上的 `register(owner, channel, handler)`——也就是 `rpc.handle` 实际委托的那个方法。上游没有任何插件调用 `rpc.handle`；`dsh-api-gateway` 对需要 `webServer` 的工作同样注入这一对服务。这一契约由 CI 的真实启动检查守护，单元测试的替身无法复现该守卫。
+自有 RPC 通道的注册方式需要单独说明：`connection.rpc.handle(channel, handler)` 在 0.1.7 与 0.2.0 宿主线上仍不可用（`@deepseek-ai/dsh-client-connection` 的 `get rpc()` 两版逐字相同，都捕获 `this.ctx`）。它的 `rpc` getter 捕获 `this.ctx`，而该上下文是 connection 服务自身的作用域，没有注入 `webServer`；`handle` 内部最终求值 `owner.webServer.register(route)`，cordis 抛出 `cannot get property "webServer" without inject`，异常又被 effect 吞掉，于是通道静默缺失，浏览器只能撞上 SPA fallback 的 405。插件改为注入 `connection` 与 `webServer`，并把自身作用域作为 owner 传给 connection 服务上的 `register(owner, channel, handler)`——也就是 `rpc.handle` 实际委托的那个方法。上游没有任何插件调用 `rpc.handle`；`dsh-api-gateway` 对需要 `webServer` 的工作同样注入这一对服务。这一契约由 CI 的真实启动检查守护，单元测试的替身无法复现该守卫。
 
 配置以 schemastery schema 声明，所有字段标记为 volatile：Loader 在 profile patch 只改动 volatile 字段时就地更新运行中的配置引用，不重新加载插件。每次请求读取一次引用快照（`snapshotConfig`）并据此解析密钥，配置热更新不会改变正在进行的请求。写入前由 `dsh-config-editor` 用完整 schema 校验（拒绝非法 URL、空过滤项等），异常快照也不能覆盖最后一次可用配置。重试策略是在注册时读取的，所以 `options()` 检测到变化时通过 `registration.replace` 更新，避免短暂移除模型路由。
 
@@ -76,19 +76,19 @@
 
 类型声明由 TypeScript 生成，构建脚本会修正声明中的相对扩展名。JS、source map 和类型声明都提交至 `lib/`。测试范围和产物检查见[开发指南](docs/development.md)。
 
-当前依赖配置保留了四项 overrides，把 `dsh-type-meta`、`dsh-compact`、`dsh-paths`、`dsh-user-interaction` 别名到 `dsh-brand@0.1.7-rc.1`。这四个名字在上游 0.1.7 线仍返回 E404；但当前解析树并没有请求它们（`package-lock.json` 与 `node_modules` 中均无对应条目），因此这些别名目前是**防御性配置而非必需项**。它们只在某个依赖真的重新请求这些名字时才生效；升级宿主依赖时应逐项核查，不要沿用「仍然必需」的说法。
+当前依赖配置保留了四项 overrides，把 `dsh-type-meta`、`dsh-compact`、`dsh-paths`、`dsh-user-interaction` 别名到 `dsh-brand@0.2.0-rc.2`。这四个名字在上游 0.2.0 线仍返回 E404；但当前解析树并没有请求它们（`package-lock.json` 与 `node_modules` 中均无对应条目），因此这些别名目前是**防御性配置而非必需项**。它们只在某个依赖真的重新请求这些名字时才生效；升级宿主依赖时应逐项核查，不要沿用「仍然必需」的说法。
 
 ## 版本兼容的边界
 
-入口读取宿主 `dsh-llm/package.json` 并拒绝低于 `0.1.7-rc.1` 的版本。这只能实现最低版本诊断，不能保证所有更高版本都兼容。ESM 具名导出还可能在入口求值之前失败，因此另有宿主导出与链接测试。
+入口读取宿主 `dsh-llm/package.json` 并拒绝低于 `0.2.0-rc.2` 的版本。这只能实现最低版本诊断，不能保证所有更高版本都兼容。ESM 具名导出还可能在入口求值之前失败，因此另有宿主导出与链接测试。
 
-兼容性以**宿主线**为单位，而不是单个补丁号。`test/fixtures/dsh-llm-0.1.7-rc.1.exports.json` 记录 0.1.7 线的具名导出面，并列出实测共享该导出面的版本（目前为 `0.1.7-rc.1`）。上游会以完全相同的代码重切 RC，因此按补丁号相等来判定兼容会误报。清单是有意显式的：遇到未列出的版本时门禁会失败，要求先比对导出面再决定是登记该版本还是重新生成快照。`test/fixtures/dsh-llm-0.1.5.exports.json` 保留为「上一个被拒绝宿主线」的对照面，供旧宿主链接守卫使用。
+兼容性以**宿主线**为单位，而不是单个补丁号。`test/fixtures/dsh-llm-0.2.0-rc.2.exports.json` 记录 0.2.0 线的具名导出面，并列出实测共享该导出面的版本（目前为 `0.2.0-rc.1`、`0.2.0-rc.2`）。上游会以完全相同的代码重切 RC，因此按补丁号相等来判定兼容会误报。清单是有意显式的：遇到未列出的版本时门禁会失败，要求先比对导出面再决定是登记该版本还是重新生成快照。`test/fixtures/dsh-llm-0.1.7-rc.1.exports.json` 保留为「上一个被拒绝宿主线」的对照面，供旧宿主链接守卫使用。
 
 宿主包在构建时是 external，不参与打包，所以换用共享同一导出面的版本不会改变产物。
 
-npm 对 prerelease 范围的判断与自定义最低版本比较也不同：`>=0.1.5-rc.1` 这类范围不会自动纳入 `0.1.7-rc.1`，因此 peer 范围写作 `>=0.1.7-rc.1 <0.1.8`，明确只接受这一条宿主线。最低版本 guard、peer 元数据与文档中的已验证版本是三个不同层面的约束。快照、CI 与文档中的版本必须与 peer 范围同步升级。
+npm 对 prerelease 范围的判断与自定义最低版本比较也不同：`>=0.1.5-rc.1` 这类范围不会自动纳入 `0.1.7-rc.1`，因此 peer 范围写作 `>=0.2.0-rc.2 <0.2.1`，明确只接受这一条宿主线。最低版本 guard、peer 元数据与文档中的已验证版本是三个不同层面的约束。快照、CI 与文档中的版本必须与 peer 范围同步升级。
 
-插件自身的版本号从 0.1.7 线起跟随宿主：`<dsh 版本>-v<本插件序号>`，例如 `0.1.5-rc.3-v0.1` 与 `0.1.7-rc.1-v0.1`；Git 标签与 GitHub Release 是 `v<插件版本>`。仓库只保留这两条适配线的 tag，npm 上旧线版本已标记 deprecated，通道分工为 `latest`（0.1.5 线）与 `next`（0.1.7 线）。发布必须显式指定 dist-tag，因为新版本号在 semver 上低于旧线的 `0.8.x`。规则细节与递增方式见[开发与 RC 发布](docs/development.md#版本号规则017-线起)。
+插件自身的版本号从 0.1.7 线起跟随宿主：`<dsh 版本>-v<本插件序号>`，例如 `0.1.7-rc.1-v0.1` 与 `0.2.0-rc.2-v0.1`；Git 标签与 GitHub Release 是 `v<插件版本>`。仓库保留 0.1.5、0.1.7 与 0.2.0 三条适配线的 tag，npm 上旧线版本已标记 deprecated，通道分工为 `latest`（0.2.0 线）与 `next`（其他线）。发布必须显式指定 dist-tag，因为新版本号在 semver 上低于旧线的 `0.8.x`。规则细节与递增方式见[开发与 RC 发布](docs/development.md#版本号规则017-线起)。
 
 新版宿主的普通 fetch 会遵循全局代理；插件 models.dev 的显式 ProxyAgent 覆盖该次下载。关闭插件代理不等于绕过宿主代理。网络行为详见[配置指南](docs/configuration.md)。
 

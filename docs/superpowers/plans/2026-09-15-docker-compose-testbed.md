@@ -1244,6 +1244,12 @@ git commit -m "test(testbed): 双语用法文档与 .gitignore（含 preserve �
 
 ---
 
+### Task 10: 全球 / 中国双网络配置与本地 skill（2026-09 批准补充）
+
+新增 `testbed/compose.china.yaml`、`.env.china.example`、`run.mjs`、网络配置测试与 `.dsh/skills/dsh-plugin-testbed-network/SKILL.md`；参数化 Dockerfile 的 Node/npm/apt/proxy 输入。全球 Compose 与 GitHub Actions 保持官方源；本地 skill 默认 `china`，复现 CI 显式 `global`。matrix 接受 `--network global|china` 并将模式纳入镜像/格标签/新鲜度。测试必须先 RED，覆盖 Compose 解析、全球无中国域、China 参数、stub Docker 入口/退出码；skill 以无指令代理选择不一致为 RED、fresh agents 为 GREEN。quota 侧先实现与审查，通过后向 PR #5 追加同构实现。
+
+---
+
 ## Self-Review 记录
 
 - **Spec 覆盖**：spec 第 4 节（目录/挂载/网络/环境变量）→ Task 1；第 5 节六步 → Task 2/3/4/6；第 2 节目标 3/4（版本与组合矩阵）→ Task 6/7/8；第 7 节 L1 与 L2 断言表 → Task 3/4/6/7；第 9 节验收标准 → Task 9 Step 4，其中阴性对照落在 Task 6 Step 4 与 Task 7 Step 5，宿主零改动落在 Task 2 Step 5 与 Task 8 Step 1/2；第 10 节 `preserve` 风险 → Task 5；第 11 节承诺（只读挂载、不占 3080、不动 CI、不跑真实上游）→ Global Constraints 与 Task 1/2。

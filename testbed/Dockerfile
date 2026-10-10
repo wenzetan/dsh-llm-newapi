@@ -7,7 +7,7 @@
 # 按 CI 的经验改用镜像源，例如 https://registry.npmmirror.com。
 FROM node:24-bookworm-slim
 
-ARG DSH_VERSION=0.1.7-rc.1
+ARG DSH_VERSION=0.2.0-rc.2
 ARG NPM_REGISTRY=https://registry.npmjs.org
 
 ENV DSH_VERSION=${DSH_VERSION} \

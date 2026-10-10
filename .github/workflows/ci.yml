@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       rc_tag:
-        description: 'Promote a successful rc tag to its stable twin on the same commit (e.g. v0.1.7-rc.1-v0.1 -> v0.1.7-v0.1). Leave empty to run checks only.'
+        description: 'Promote a successful rc tag to its stable twin on the same commit (e.g. v0.2.0-rc.2-v0.1 -> v0.2.0-v0.1). Leave empty to run checks only.'
         required: false
         type: string
 
@@ -88,7 +88,7 @@ jobs:
           git clone --depth 1 https://github.com/omdsh-dev/dsh-plugin-check /tmp/pc
           # Borrow the checker symlinks from the exact seam this plugin targets;
           # keep the pin even when npm dist-tags advance.
-          npm install -g @deepseek-ai/dsh@0.1.7-rc.1 >/dev/null
+          npm install -g @deepseek-ai/dsh@0.2.0-rc.2 >/dev/null
           cd /tmp/pc
           npm install --no-audit --no-fund --ignore-scripts
           # The built entry imports @deepseek-ai/dsh-tools at runtime
@@ -123,11 +123,11 @@ jobs:
   # the SPA fallback's 405).
   boot:
     needs: build
-    # The 0.1.5 line stays published but is not CI-verifiable: the pinned
-    # host here is 0.1.7-rc.1 and the plugin's version guard rejects the
-    # older line by design. Its release tags skip this job; the 0.1.7 line
-    # (and anything newer) always runs it.
-    if: ${{ !startsWith(github.ref_name, 'v0.1.5') }}
+    # The 0.1.5 and 0.1.7 lines stay published but are not CI-verifiable: the
+    # pinned host here is 0.2.0-rc.2 and the plugin's version guard rejects
+    # the older lines by design. Their release tags skip this job; the 0.2.0
+    # line (and anything newer) always runs it.
+    if: ${{ !startsWith(github.ref_name, 'v0.1.5') && !startsWith(github.ref_name, 'v0.1.7') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -137,7 +137,7 @@ jobs:
         with:
           node-version: 24
       - name: Install dsh and pnpm
-        run: npm install -g @deepseek-ai/dsh@0.1.7-rc.1 pnpm
+        run: npm install -g @deepseek-ai/dsh@0.2.0-rc.2 pnpm
       - name: Install the packed tarball into a fresh web profile
         run: |
           set -euo pipefail
@@ -242,7 +242,7 @@ jobs:
           ' "$RPC_BODY"
           echo "startup check passed: authenticated web ready, client bundle in boot graph, RPC channel HTTP $rpc"
 
-  # A tag like v0.1.7-rc.1-v0.1 (current numbering, host-following) or
+  # A tag like v0.2.0-rc.2-v0.1 (current numbering, host-following) or
   # v0.8.2-rc.1 (legacy) publishes as a TEST version everywhere: GitHub
   # Release marked pre-release, npm under the `next` dist-tag. The stable
   # `latest` / full release only ever comes from a suffix-free vX.Y.Z tag,
@@ -275,10 +275,10 @@ jobs:
           # The host line currently promoted to npm `latest`. Moving the
           # promoted line is a one-line change here; every other rc line
           # publishes under `next`.
-          LATEST_LINE: v0.1.7
+          LATEST_LINE: v0.2.0
         run: |
           # Channel rules for the host-following version scheme
-          # (<dsh version>-v<plugin revision>, e.g. v0.1.7-rc.1-v0.3):
+          # (<dsh version>-v<plugin revision>, e.g. v0.2.0-rc.2-v0.1):
           #  - a tag on the promoted line (LATEST_LINE) → npm `latest`;
           #  - a stable tag (the dsh segment carries no `-rc.N`) → `latest`
           #    and a GitHub Release not marked pre-release;
@@ -322,7 +322,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   # Manual confirmation: promote a green rc tag to its stable twin on the
-  # same commit. New-scheme example: v0.1.7-rc.1-v0.1 -> v0.1.7-v0.1 (the
+  # same commit. New-scheme example: v0.2.0-rc.2-v0.1 -> v0.2.0-v0.1 (the
   # host's rc segment is dropped, the plugin revision stays). The stable tag
   # then flows through the ordinary release job as a full release + npm
   # `latest`. The twin is a release-only commit on top of the rc commit and

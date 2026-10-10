@@ -1,15 +1,3 @@
-> 🚧 **Archived Notice / 归档通知**
->
-> **English:**  
-> This repository is deprecated and will be archived soon.  
-> New installations should use the native **Custom Provider** feature provided by **dsh desktop** instead.  
-> Existing users should migrate their provider configurations before the repository is archived.
->
-> **中文：**  
-> 本仓库已停止功能开发，并计划近期归档。  
-> 新用户请直接使用 **dsh desktop 原生 Custom Provider（自定义 Provider）** 功能，不再建议安装或使用本项目。  
-> 已有用户请在仓库归档前迁移现有 Provider 配置数据。
-
 # dsh-llm-newapi
 
 **English** | [中文](README.zh-CN.md)
@@ -18,12 +6,15 @@ Use your NewAPI gateway in [DeepSeek Harness](https://github.com/deepseek-ai/dee
 
 ## Choose a compatible version
 
-**Install the host and plugin as a pair.** Status checked on September 24, 2026.
+**Install the host and plugin as a pair.** Status checked on October 4, 2026.
 
 | dsh host | Plugin version line | npm channel | Status |
 | --- | --- | --- | --- |
 | `0.1.5-rc.3` | `0.1.5-rc.3-v0.3` | — | Published, that line is frozen |
-| **`0.1.7-rc.1`** | **`0.1.7-rc.1-v0.x`** | **`latest`** | **Current promoted line** |
+| `0.1.7-rc.1` | `0.1.7-rc.1-v0.x` | — | Published, cannot run on a 0.2.0 host |
+| **`0.2.0-rc.2`** | **`0.2.0-rc.2-v0.x`** | **`latest`** | **Current promoted line** |
+
+`latest` switches from 0.1.7 to 0.2.0 when the first 0.2.0 tag is published; before then, query `dist-tags` for the actual pointer.
 
 On a host line only the last segment increments (`-v0.1` → `-v0.2` → …), so the promoted line is named as `v0.x`. Query the exact version each channel currently points at:
 
@@ -37,18 +28,18 @@ The plugin version follows the upstream host: `<dsh version>-v<plugin revision>`
 
 | Case | dsh version | Plugin version (npm) | Git tag / Release |
 | --- | --- | --- | --- |
-| Upstream RC | `0.1.7-rc.1` | `0.1.7-rc.1-v0.1` | `v0.1.7-rc.1-v0.1` |
-| Later plugin change on the same host line | `0.1.7-rc.1` | `0.1.7-rc.1-v0.2` | `v0.1.7-rc.1-v0.2` |
-| Upstream stable | `0.1.7` | `0.1.7-v0.1` | `v0.1.7-v0.1` |
-| Host line changes (revision restarts) | `0.1.7-rc.2` | `0.1.7-rc.2-v0.1` | `v0.1.7-rc.2-v0.1` |
+| Upstream RC | `0.2.0-rc.2` | `0.2.0-rc.2-v0.1` | `v0.2.0-rc.2-v0.1` |
+| Later plugin change on the same host line | `0.2.0-rc.2` | `0.2.0-rc.2-v0.2` | `v0.2.0-rc.2-v0.2` |
+| Upstream stable | `0.2.0` | `0.2.0-v0.1` | `v0.2.0-v0.1` |
+| Host line changes (revision restarts) | `0.2.0-rc.3` | `0.2.0-rc.3-v0.1` | `v0.2.0-rc.3-v0.1` |
 
-- npm forbids a leading `v` in the version field, so the package reads `0.1.7-rc.1-v0.1` while the Git tag and GitHub Release use `v0.1.7-rc.1-v0.1`.
-- **Channel split**: npm `latest` points at the currently promoted host line (the 0.1.7 line today); `next` is reserved for other lines or future previews. Promoting or switching a line is a one-line change (`LATEST_LINE` in CI); a stable `0.1.7` tag (`v0.1.7-v0.x`) also lands on `latest`.
+- npm forbids a leading `v` in the version field, so the package reads `0.2.0-rc.2-v0.1` while the Git tag and GitHub Release use `v0.2.0-rc.2-v0.1`.
+- **Channel split**: npm `latest` points at the currently promoted host line (the 0.2.0 line today); `next` is reserved for other lines or future previews. Promoting or switching a line is a one-line change (`LATEST_LINE` in CI); a stable `0.2.0` tag (`v0.2.0-v0.x`) also lands on `latest`.
 - The older **`0.8.x` series** (dsh `0.1.1-rc.2` / `0.1.2-rc.1` host lines) had its tags removed and is marked deprecated on npm.
 
 ### Compatibility and upgrades
 
-Plugin `0.1.7-rc.1-v0.x` supports the **dsh `0.1.7-rc.1` line** and rejects the `0.1.5` host with an explicit upgrade message; `0.1.5-rc.3` users run `0.1.5-rc.3-v0.3`. Compatibility is keyed to the host line rather than one patch: a later `0.1.7-rc` cut is covered as long as its export surface matches — `npm run test:host` compares the installed surface against the checked-in one and fails loudly when it does not, instead of assuming. `0.1.7` replaced the settings architecture (plugin configuration now projects from the profile patch with volatile fields), so this is not a pure dependency bump: see the [compatibility assessment (Chinese)](docs/2026-09-24-dsh-0.1.7-rc.1-assessment.md).
+Plugin `0.2.0-rc.2-v0.x` supports the **dsh `0.2.0-rc.2` line** and rejects `0.1.7` and older hosts with an explicit upgrade message; `0.1.7-rc.1` users run `0.1.7-rc.1-v0.x`. Compatibility is keyed to the host line rather than one patch: a later `0.2.0-rc` cut is covered as long as its export surface matches — `npm run test:host` compares the installed surface against the checked-in one and fails loudly when it does not, instead of assuming. See the [compatibility assessment (Chinese)](docs/2026-10-04-dsh-0.2.0-rc.2-assessment.md).
 
 Both lines are GitHub Pre-releases (the plugin has no stable release yet). The host and plugin use `latest` with different meanings, so do not assume they pair — pick a host line from the table and query `dist-tags` for the exact version.
 
@@ -56,23 +47,23 @@ Both lines are GitHub Pre-releases (the plugin has no stable release yet). The h
 
 You need Node.js, npm and pnpm. Repository CI uses Node.js 24. Install the host with npm, then install the plugin from the npm registry into dsh's `web` profile.
 
-### Current promoted pair (dsh `0.1.7-rc.1`, npm `latest`)
+### Current promoted pair (dsh `0.2.0-rc.2`, npm `latest`)
 
 ```sh
-npm install -g @deepseek-ai/dsh@0.1.7-rc.1
+npm install -g @deepseek-ai/dsh@0.2.0-rc.2
 npm install -g pnpm
 dsh plugin --profile web add --save-exact "dsh-llm-newapi@$(npm view dsh-llm-newapi dist-tags.latest)"
 ```
 
-### Previous host pair (dsh `0.1.5-rc.3`, that line is frozen)
+### Previous host pair (dsh `0.1.7-rc.1`)
 
 ```sh
-npm install -g @deepseek-ai/dsh@0.1.5-rc.3
+npm install -g @deepseek-ai/dsh@0.1.7-rc.1
 npm install -g pnpm
-dsh plugin --profile web add --save-exact dsh-llm-newapi@0.1.5-rc.3-v0.3
+dsh plugin --profile web add --save-exact dsh-llm-newapi@0.1.7-rc.1-v0.3
 ```
 
-Choose one pair. The promoted pair resolves the current version through `dist-tags`, so no version needs to be copied by hand; the 0.1.5 line is frozen at `0.1.5-rc.3-v0.3`. `--save-exact` records an exact plugin dependency so a later dependency update does not switch versions automatically. Use `dsh plugin` to manage the profile; installing `dsh-llm-newapi` globally by itself does not register it there.
+Choose one pair. The promoted pair resolves the current version through `dist-tags`, so no version needs to be copied by hand; the 0.1.7 line is pinned at `0.1.7-rc.1-v0.3`. `--save-exact` records an exact plugin dependency so a later dependency update does not switch versions automatically. Use `dsh plugin` to manage the profile; installing `dsh-llm-newapi` globally by itself does not register it there.
 
 ### Check that the plugin is enabled
 

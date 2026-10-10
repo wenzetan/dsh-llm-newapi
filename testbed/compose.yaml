@@ -7,11 +7,11 @@ services:
     build:
       context: .
       args:
-        DSH_VERSION: "${DSH_VERSION:-0.1.7-rc.1}"
+        DSH_VERSION: "${DSH_VERSION:-0.2.0-rc.2}"
         NPM_REGISTRY: "${NPM_REGISTRY:-https://registry.npmjs.org}"
-    image: "dsh-testbed-llm-newapi:${DSH_VERSION:-0.1.7-rc.1}"
+    image: "dsh-testbed-llm-newapi:${DSH_VERSION:-0.2.0-rc.2}"
     environment:
-      DSH_VERSION: "${DSH_VERSION:-0.1.7-rc.1}"
+      DSH_VERSION: "${DSH_VERSION:-0.2.0-rc.2}"
       PROFILE_MODE: "${PROFILE_MODE:-minimal}"
       COMPANION: "${COMPANION:-}"
       GRID_LABEL: "${GRID_LABEL:-local}"

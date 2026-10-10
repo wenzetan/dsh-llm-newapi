@@ -254,6 +254,12 @@ volumes:
 
 ---
 
-## 12. 未决问题
+## 12. 全球 / 中国双网络配置（2026-09 补充，已批准）
 
-无。第 10 节的 `preserve` 模式风险在实施第一步用实测收敛，不以猜测填充。
+GitHub Actions / 发布验证继续使用官方全球基线 `testbed/compose.yaml`；本地代理通过仓库内 skill 默认选择 `testbed/compose.china.yaml` 覆盖层。中国模式覆盖 Node 基础镜像、npm registry、临时 apt mirror 与可选代理，并使用独立 image / Compose project 标识。统一 Node 启动器和 matrix 的 `--network global|china` 参数生成 Compose 文件列表，未知模式失败关闭；项目 skill 只对本地 testbed 请求默认 China，复现 CI 时显式 global，不修改 CI 或存储凭据。两模式需分别验证 Compose 解析，全球配置不得出现中国镜像域，中国模式至少完成一次实际 build 或保留明确网络阻断证据。
+
+本补充同样适用于 `dsh-quota-panel`，两仓库的 skill 与网络模式语义保持一致。
+
+## 13. 未决问题
+
+无。第 10 节的 `preserve` 模式风险以实际装配结果记录；双网络具体镜像站与 digest 由 README 和测试证据维护，不污染全球基线。
