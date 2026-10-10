@@ -14,51 +14,45 @@
 
 **宿主版本与插件版本需要配套。** 状态核对于 2026-10-04。
 
-| dsh 宿主 | 插件版本线 | npm 通道 | 状态 |
+| dsh 宿主 | 插件版本线 | 安装来源 | 状态 |
 | --- | --- | --- | --- |
-| `0.1.5-rc.3` | `0.1.5-rc.3-v0.3` | — | 已发布，该线已冻结 |
-| `0.1.7-rc.1` | `0.1.7-rc.1-v0.x` | — | 已发布，无法在 0.2.0 宿主上运行 |
-| **`0.2.0-rc.2`** | **`0.2.0-rc.2-v0.x`** | **`latest`** | **当前主推线** |
+| `0.1.5-rc.3` | `0.1.5-rc.3-v0.3` | tag `v0.1.5-rc.3-v0.3` | 已发布，该线已冻结 |
+| `0.1.7-rc.1` | `0.1.7-rc.1-v0.x` | tag `v0.1.7-rc.1-v0.3` | 已发布，无法在 0.2.0 宿主上运行 |
+| **`0.2.0-rc.2`** | **`0.2.0-rc.2-v0.x`** | **tag `v0.2.0-rc.2-v0.1`** | **当前主推线** |
 
-0.2.0 线的首个 tag 发布后 `latest` 才从 0.1.7 切换过来；切换前请用 `dist-tags` 查询实际指向。
-
-同一宿主线上的版本号只递增最后一段（`-v0.1` → `-v0.2` → …），因此主推线用 `v0.x` 表示；查询各通道当前指向的精确版本：
-
-```sh
-npm view dsh-llm-newapi dist-tags --json
-```
+插件**不再通过 npm 分发**：请从本仓库的 Git 标签（或对应的 GitHub Release）安装，命令见[从 Git 安装](#从-git-安装)。同一宿主线上的版本号只递增最后一段（`-v0.1` → `-v0.2` → …），因此当前线用 `v0.x` 表示；[GitHub Releases](https://github.com/wenzetan/dsh-llm-newapi/releases) 的标签列表是可用版本的权威索引。
 
 ### 版本号规则
 
 插件版本跟随上游宿主，格式为 `<dsh 版本>-v<本插件序号>`，只有最后一段是本插件自己的序号：
 
-| 场景 | dsh 版本 | 插件版本（npm） | Git 标签 / Release |
+| 场景 | dsh 版本 | 插件版本 | Git 标签 / Release |
 | --- | --- | --- | --- |
 | 上游 RC | `0.2.0-rc.2` | `0.2.0-rc.2-v0.1` | `v0.2.0-rc.2-v0.1` |
 | 同一宿主线上的后续插件改动 | `0.2.0-rc.2` | `0.2.0-rc.2-v0.2` | `v0.2.0-rc.2-v0.2` |
 | 上游正式版 | `0.2.0` | `0.2.0-v0.1` | `v0.2.0-v0.1` |
 | 宿主换线（序号重新开始） | `0.2.0-rc.3` | `0.2.0-rc.3-v0.1` | `v0.2.0-rc.3-v0.1` |
 
-- npm 的版本字段不能带前导 `v`，所以包版本写作 `0.2.0-rc.2-v0.1`，而 Git 标签与 GitHub Release 是 `v0.2.0-rc.2-v0.1`。
-- **通道分工**：npm `latest` 指向当前主推宿主线的版本（现为 0.2.0 线）；`next` 保留给其他线或未来的预览发布。宿主线升格或切换时，改 CI 里的 `LATEST_LINE` 一行即可；0.2.0 出现正式版（`v0.2.0-v0.x`）后同样进入 `latest`。
-- **更早的 `0.8.x` 系列**（对应 dsh `0.1.1-rc.2`、`0.1.2-rc.1` 宿主线）已移除 tag，并在 npm 上标记为 deprecated，不再维护。
+- Git 标签与 GitHub Release 带 `v` 前缀（`v0.2.0-rc.2-v0.1`），`package.json` 里是 `0.2.0-rc.2-v0.1`。
+- **分发方式**：插件只以仓库标签分发，没有 npm 通道；你安装的标签就是精确版本，不涉及任何 `dist-tags` 查询。将来若出现正式版标签（`v0.2.0-v0.x`），它同样只是一个普通的 GitHub Release。
+- **更早的 `0.8.x` 系列**（对应 dsh `0.1.1-rc.2`、`0.1.2-rc.1` 宿主线）已从本仓库移除 tag，不再维护。
 
 ### 兼容性与升级
 
 `0.2.0-rc.2-v0.x` 支持 **dsh `0.2.0-rc.2` 宿主线**，并会明确拒绝 `0.1.7` 及更早宿主并提示升级；`0.1.7-rc.1` 用户使用 `0.1.7-rc.1-v0.x`。兼容性以宿主线而非单个补丁号为准：`0.2.0-rc` 线内的接缝面是固定的，该线后续再切 RC 同样适用——只要导出面一致；`npm run test:host` 会把已安装的导出面与入库快照逐一比对，不一致时直接报错，而不是默认放行。详见[适配评估](docs/2026-10-04-dsh-0.2.0-rc.2-assessment.md)。
 
-两个版本线都是 GitHub Pre-release（插件当前没有正式版）。dsh 与插件各自的 `latest` 含义不同，不要假设它们能配套——请按上表选择宿主线，并用 `dist-tags` 查询当前精确版本。
+两个版本线都是 GitHub Pre-release（插件当前没有正式版）。宿主从 npm 安装、插件从本仓库标签安装，两者的版本号不能想当然地配套——请按上表选择宿主线，再装上与之对应的标签。
 
-## 安装：使用指定版本
+## 从 Git 安装
 
-需要 Node.js、npm 和 pnpm；本仓库 CI 使用 Node.js 24。宿主通过 npm 安装，插件从 npm registry 安装到 dsh 的 `web` profile。
+需要 Node.js、npm 和 pnpm；本仓库 CI 使用 Node.js 24。宿主通过 npm 安装，插件直接按本仓库的标签安装到 dsh 的 `web` profile。
 
-### 当前主推组合（dsh `0.2.0-rc.2`，npm `latest`）
+### 当前主推组合（dsh `0.2.0-rc.2`，标签 `v0.2.0-rc.2-v0.1`）
 
 ```sh
 npm install -g @deepseek-ai/dsh@0.2.0-rc.2
 npm install -g pnpm
-dsh plugin --profile web add --save-exact "dsh-llm-newapi@$(npm view dsh-llm-newapi dist-tags.latest)"
+dsh plugin --profile web add "github:wenzetan/dsh-llm-newapi#v0.2.0-rc.2-v0.1"
 ```
 
 ### 上一个宿主组合（dsh `0.1.7-rc.1`）
@@ -66,10 +60,10 @@ dsh plugin --profile web add --save-exact "dsh-llm-newapi@$(npm view dsh-llm-new
 ```sh
 npm install -g @deepseek-ai/dsh@0.1.7-rc.1
 npm install -g pnpm
-dsh plugin --profile web add --save-exact dsh-llm-newapi@0.1.7-rc.1-v0.3
+dsh plugin --profile web add "github:wenzetan/dsh-llm-newapi#v0.1.7-rc.1-v0.3"
 ```
 
-选择一组执行即可。主推组合通过 `dist-tags` 取当前版本，因此不需要手抄版本号；0.1.7 线固定为 `0.1.7-rc.1-v0.3`。`--save-exact` 将插件依赖记录为精确版本，避免后续依赖更新时自动切换版本。插件安装使用 `dsh plugin`，它会管理对应 profile；单独全局安装 `dsh-llm-newapi` 不会完成这个步骤。
+选择一组执行即可。`github:` 写法把标签钉死，安装的版本不会漂移，也不涉及任何 registry 查询。也可以从对应的 [Release](https://github.com/wenzetan/dsh-llm-newapi/releases) 下载 `.tgz`，把绝对路径交给 `dsh plugin --profile web add`。插件安装使用 `dsh plugin`，它会管理对应 profile；单独全局安装插件不会完成这个步骤。
 
 ### 确认插件已启用
 
@@ -124,7 +118,7 @@ dsh web
 
 升级前先核对版本表，停止正在运行的 dsh Web，并备份自己的 dsh 配置及会话数据。安装目标宿主和指定插件版本后，保留原有 bundle 项并重新启动；插件继续使用原来的 `newapi` 凭据引用，配置改由 profile 的 Cordis patch 保存（见[配置说明](docs/configuration.md)）。
 
-上游 dsh `0.1.7` 会把会话格式从 V3 迁移到 V4（工具结果提升为 tool 角色消息、消息来源更名等），迁移后的会话不能由旧宿主直接读取。退回旧宿主时不能只更换 npm 版本，需参考[上游迁移说明](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.1.7-rc.1/packages/session/session-format-v3-to-v4/README.zh.md)。
+上游 dsh `0.1.7` 会把会话格式从 V3 迁移到 V4（工具结果提升为 tool 角色消息、消息来源更名等），迁移后的会话不能由旧宿主直接读取。退回旧宿主时不能只换插件的标签，需参考[上游迁移说明](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.1.7-rc.1/packages/session/session-format-v3-to-v4/README.zh.md)。
 
 | 问题 | 先检查 |
 | --- | --- |
@@ -140,6 +134,7 @@ dsh web
 - [配置与排障](docs/configuration.md)：配置字段、模型参数匹配、代理与保存失败处理。
 - [开发与 RC 发布](docs/development.md)：本地构建、测试范围和发布前检查。
 - [实现设计](DESIGN.md)：代码入口、数据流和关键设计决策。
-- [0.1.7-rc.1 适配评估](docs/2026-09-24-dsh-0.1.7-rc.1-assessment.md)：版本盘点、破坏性变更与验证结论。
+- [0.2.0-rc.2 适配评估](docs/2026-10-04-dsh-0.2.0-rc.2-assessment.md)：当前宿主线、验证结论与已知边界。
+- [0.1.7-rc.1 适配评估](docs/2026-09-24-dsh-0.1.7-rc.1-assessment.md)：历史快照。
 - [0.1.5-rc.1 适配评估](docs/2026-09-10-dsh-0.1.5-rc.1-assessment.md)：历史快照。
 - [发布记录](https://github.com/wenzetan/dsh-llm-newapi/releases)：已发布版本的变更和下载附件。

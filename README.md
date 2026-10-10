@@ -20,51 +20,45 @@ Use your NewAPI gateway in [DeepSeek Harness](https://github.com/deepseek-ai/dee
 
 **Install the host and plugin as a pair.** Status checked on October 4, 2026.
 
-| dsh host | Plugin version line | npm channel | Status |
+| dsh host | Plugin version line | Install from | Status |
 | --- | --- | --- | --- |
-| `0.1.5-rc.3` | `0.1.5-rc.3-v0.3` | — | Published, that line is frozen |
-| `0.1.7-rc.1` | `0.1.7-rc.1-v0.x` | — | Published, cannot run on a 0.2.0 host |
-| **`0.2.0-rc.2`** | **`0.2.0-rc.2-v0.x`** | **`latest`** | **Current promoted line** |
+| `0.1.5-rc.3` | `0.1.5-rc.3-v0.3` | tag `v0.1.5-rc.3-v0.3` | Published, that line is frozen |
+| `0.1.7-rc.1` | `0.1.7-rc.1-v0.x` | tag `v0.1.7-rc.1-v0.3` | Published, cannot run on a 0.2.0 host |
+| **`0.2.0-rc.2`** | **`0.2.0-rc.2-v0.x`** | **tag `v0.2.0-rc.2-v0.1`** | **Current promoted line** |
 
-`latest` switches from 0.1.7 to 0.2.0 when the first 0.2.0 tag is published; before then, query `dist-tags` for the actual pointer.
-
-On a host line only the last segment increments (`-v0.1` → `-v0.2` → …), so the promoted line is named as `v0.x`. Query the exact version each channel currently points at:
-
-```sh
-npm view dsh-llm-newapi dist-tags --json
-```
+The plugin is **no longer distributed through npm**: install it from this repository's Git tag (or the matching GitHub Release), as shown under [Install from Git](#install-from-git). On a host line only the last segment increments (`-v0.1` → `-v0.2` → …), so the current line is named `v0.x`; the tag list on [GitHub Releases](https://github.com/wenzetan/dsh-llm-newapi/releases) is the authoritative index of what exists.
 
 ### Version scheme
 
 The plugin version follows the upstream host: `<dsh version>-v<plugin revision>`. Only the last segment is this plugin's own revision:
 
-| Case | dsh version | Plugin version (npm) | Git tag / Release |
+| Case | dsh version | Plugin version | Git tag / Release |
 | --- | --- | --- | --- |
 | Upstream RC | `0.2.0-rc.2` | `0.2.0-rc.2-v0.1` | `v0.2.0-rc.2-v0.1` |
 | Later plugin change on the same host line | `0.2.0-rc.2` | `0.2.0-rc.2-v0.2` | `v0.2.0-rc.2-v0.2` |
 | Upstream stable | `0.2.0` | `0.2.0-v0.1` | `v0.2.0-v0.1` |
 | Host line changes (revision restarts) | `0.2.0-rc.3` | `0.2.0-rc.3-v0.1` | `v0.2.0-rc.3-v0.1` |
 
-- npm forbids a leading `v` in the version field, so the package reads `0.2.0-rc.2-v0.1` while the Git tag and GitHub Release use `v0.2.0-rc.2-v0.1`.
-- **Channel split**: npm `latest` points at the currently promoted host line (the 0.2.0 line today); `next` is reserved for other lines or future previews. Promoting or switching a line is a one-line change (`LATEST_LINE` in CI); a stable `0.2.0` tag (`v0.2.0-v0.x`) also lands on `latest`.
-- The older **`0.8.x` series** (dsh `0.1.1-rc.2` / `0.1.2-rc.1` host lines) had its tags removed and is marked deprecated on npm.
+- The Git tag and GitHub Release carry a `v` prefix (`v0.2.0-rc.2-v0.1`); `package.json` stays `0.2.0-rc.2-v0.1`.
+- **Distribution**: the plugin ships as repository tags only — there is no npm channel, so the tag you install *is* the exact version and no `dist-tags` lookup is involved. A future stable tag (`v0.2.0-v0.x`) would be an ordinary GitHub Release.
+- The older **`0.8.x` series** (dsh `0.1.1-rc.2` / `0.1.2-rc.1` host lines) had its tags removed from this repository and is no longer supported.
 
 ### Compatibility and upgrades
 
 Plugin `0.2.0-rc.2-v0.x` supports the **dsh `0.2.0-rc.2` line** and rejects `0.1.7` and older hosts with an explicit upgrade message; `0.1.7-rc.1` users run `0.1.7-rc.1-v0.x`. Compatibility is keyed to the host line rather than one patch: a later `0.2.0-rc` cut is covered as long as its export surface matches — `npm run test:host` compares the installed surface against the checked-in one and fails loudly when it does not, instead of assuming. See the [compatibility assessment (Chinese)](docs/2026-10-04-dsh-0.2.0-rc.2-assessment.md).
 
-Both lines are GitHub Pre-releases (the plugin has no stable release yet). The host and plugin use `latest` with different meanings, so do not assume they pair — pick a host line from the table and query `dist-tags` for the exact version.
+Both lines are GitHub Pre-releases (the plugin has no stable release yet). The host comes from npm while the plugin comes from this repository's tag, so do not assume their versions pair — pick a host line from the table and install the matching tag next to it.
 
-## Install exact versions
+## Install from Git
 
-You need Node.js, npm and pnpm. Repository CI uses Node.js 24. Install the host with npm, then install the plugin from the npm registry into dsh's `web` profile.
+You need Node.js, npm and pnpm. Repository CI uses Node.js 24. Install the host with npm, then install the plugin into dsh's `web` profile straight from this repository's tag.
 
-### Current promoted pair (dsh `0.2.0-rc.2`, npm `latest`)
+### Current promoted pair (dsh `0.2.0-rc.2`, tag `v0.2.0-rc.2-v0.1`)
 
 ```sh
 npm install -g @deepseek-ai/dsh@0.2.0-rc.2
 npm install -g pnpm
-dsh plugin --profile web add --save-exact "dsh-llm-newapi@$(npm view dsh-llm-newapi dist-tags.latest)"
+dsh plugin --profile web add "github:wenzetan/dsh-llm-newapi#v0.2.0-rc.2-v0.1"
 ```
 
 ### Previous host pair (dsh `0.1.7-rc.1`)
@@ -72,10 +66,10 @@ dsh plugin --profile web add --save-exact "dsh-llm-newapi@$(npm view dsh-llm-new
 ```sh
 npm install -g @deepseek-ai/dsh@0.1.7-rc.1
 npm install -g pnpm
-dsh plugin --profile web add --save-exact dsh-llm-newapi@0.1.7-rc.1-v0.3
+dsh plugin --profile web add "github:wenzetan/dsh-llm-newapi#v0.1.7-rc.1-v0.3"
 ```
 
-Choose one pair. The promoted pair resolves the current version through `dist-tags`, so no version needs to be copied by hand; the 0.1.7 line is pinned at `0.1.7-rc.1-v0.3`. `--save-exact` records an exact plugin dependency so a later dependency update does not switch versions automatically. Use `dsh plugin` to manage the profile; installing `dsh-llm-newapi` globally by itself does not register it there.
+Choose one pair. A `github:` spec pins the tag, so the installed version cannot drift and no registry lookup is involved. You can also download the `.tgz` from the matching [Release](https://github.com/wenzetan/dsh-llm-newapi/releases) and pass its absolute path to `dsh plugin --profile web add`. Use `dsh plugin` to manage the profile; installing the plugin globally by itself does not register it there.
 
 ### Check that the plugin is enabled
 
@@ -130,7 +124,7 @@ Model discovery queries your gateway for available models. models.dev is a publi
 
 Check the version table, stop dsh Web and back up your dsh configuration and session data before upgrading. Install the target host and exact plugin version, keep the existing bundle entry and restart. The plugin retains the `newapi` credential reference; configuration now persists through the profile's Cordis patch (see [configuration](docs/configuration.md)).
 
-Host `0.1.7` migrates sessions from V3 to V4 (tool results become tool-role messages, message sources are renamed); older hosts cannot directly read migrated sessions. Reinstalling an older npm version alone is not a complete rollback. See the [upstream migration guide](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.1.7-rc.1/packages/session/session-format-v3-to-v4/README.md).
+Host `0.1.7` migrates sessions from V3 to V4 (tool results become tool-role messages, message sources are renamed); older hosts cannot directly read migrated sessions. Installing an older plugin tag alone is not a complete rollback. See the [upstream migration guide](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.1.7-rc.1/packages/session/session-format-v3-to-v4/README.md).
 
 | Symptom | Check first |
 | --- | --- |
@@ -148,7 +142,8 @@ The detailed guides below are currently in Chinese:
 - [Configuration and troubleshooting](docs/configuration.md): fields, model matching, proxies and save failures.
 - [Development and RC releases](docs/development.md): builds, test coverage and release checks.
 - [Design](DESIGN.md): source map, data flow and implementation decisions.
-- [0.1.7-rc.1 assessment](docs/2026-09-24-dsh-0.1.7-rc.1-assessment.md): version inventory, breaking changes and verification.
+- [0.2.0-rc.2 assessment](docs/2026-10-04-dsh-0.2.0-rc.2-assessment.md): the current host line, its verification and its limits.
+- [0.1.7-rc.1 assessment](docs/2026-09-24-dsh-0.1.7-rc.1-assessment.md): historical snapshot.
 - [0.1.5-rc.1 assessment](docs/2026-09-10-dsh-0.1.5-rc.1-assessment.md): historical snapshot.
 
 See [GitHub Releases](https://github.com/wenzetan/dsh-llm-newapi/releases) for published changes and downloadable packages.
