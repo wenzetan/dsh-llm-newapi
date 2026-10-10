@@ -108,22 +108,23 @@ export interface WireToolCallDelta {
     index: number;
     /**
      * Present on the first delta of each call only. Non-conforming gateways
-     * repeat it as an EMPTY string on continuation deltas (instead of
-     * omitting the field); the translator only accepts non-empty values so
+     * repeat it on continuation deltas either as an EMPTY string or as an
+     * explicit JSON `null`; the translator only accepts non-empty strings so
      * the real id from the first delta survives (issue #1).
      */
-    id?: string;
-    type?: 'function';
+    id?: string | null;
+    type?: 'function' | null;
     function?: {
         /**
          * Present on the first delta of each call only. Non-conforming gateways
-         * repeat it as an EMPTY string on continuation deltas; only non-empty
-         * values are accepted so the tool name survives (issue #1).
+         * repeat it on continuation deltas either as an EMPTY string or as an
+         * explicit JSON `null`; only non-empty strings are accepted so the
+         * tool name survives (issue #1).
          */
-        name?: string;
-        /** Argument JSON fragment (concatenate across deltas). */
-        arguments?: string;
-    };
+        name?: string | null;
+        /** Argument JSON fragment (concatenate across deltas); gateways occasionally send explicit null. */
+        arguments?: string | null;
+    } | null;
 }
 /**
  * Wire token accounting. `prompt_tokens` INCLUDES cache hits; `mapUsage`

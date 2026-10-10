@@ -488,12 +488,17 @@ function stubModelsListing() {
   )
 }
 
-// ── Block G: empty-string tool-call id/name deltas never clobber the call (issue #1) ──
-// The qcplay gateway (glm-5.3) repeats `id`/`function.name` on every
-// continuation delta as EMPTY strings instead of omitting the fields; a
-// presence-only check overwrote the first delta's real tool name with '',
-// so every tool call died as `unknown tool`. The stream path is exercised
-// end to end — adapter.stream → fetch stub → parseSse → translate.
+// ── Block G: empty-string / explicit-null tool-call id/name deltas never clobber the call (issue #1) ──
+// Two non-conforming continuation shapes are known. The qcplay gateway
+// (glm-5.3) repeats `id`/`function.name` as EMPTY strings instead of
+// omitting the fields; a presence-only check overwrote the first delta's
+// real tool name with '', so every tool call died as `unknown tool`. Some
+// upstreams instead send an explicit JSON `null`, which the empty-string
+// guard did not catch either: `null !== undefined` is true, so the merge
+// reached `null.length` and threw a TypeError that adapter.stream()
+// surfaced as TRANSPORT, killing the stream the moment a tool call began.
+// Both shapes ride the stream path end to end — adapter.stream → fetch
+// stub → parseSse → translate.
 {
   const adapter = new plugin.NewApiAdapter({
     options: () => ({
@@ -508,12 +513,15 @@ function stubModelsListing() {
     resolveApiKey: async () => 'smoke-key',
   })
 
-  // Verbatim issue shapes: real id/name only on the first delta, empty
-  // strings on every continuation (one delta also repeats an empty id).
+  // Verbatim issue shapes: real id/name only on the first delta, then empty
+  // strings (one delta also repeats an empty id) AND explicit JSON nulls on
+  // the continuation deltas. Argument fragments still concatenate into one
+  // valid JSON object.
   const deltas = [
     { index: 0, id: 'call_5f62a3f002704343bf16a3d7', type: 'function', function: { name: 'get_time', arguments: '{"' } },
     { index: 0, type: 'function', function: { name: '', arguments: 'tz' } },
-    { index: 0, id: '', type: 'function', function: { name: '', arguments: '":"Asia/Shanghai"}' } },
+    { index: 0, id: null, type: null, function: { name: null, arguments: '":"Asia' } },
+    { index: 0, id: '', type: 'function', function: { name: '', arguments: '/Shanghai"}' } },
   ]
   const sse = [
     ...deltas.map(delta => `data: ${JSON.stringify({ choices: [{ delta: { tool_calls: [delta] } }] })}\n\n`),
@@ -537,7 +545,7 @@ function stubModelsListing() {
   assert.equal(ended.length, 1)
   const block = ended[0].block
   assert.equal(block.type, 'tool-call')
-  // The first delta's real identity survives the empty-string continuations.
+  // The first delta's real identity survives both continuation shapes.
   assert.equal(block.id, 'call_5f62a3f002704343bf16a3d7')
   assert.equal(block.name, 'get_time')
   assert.equal(block.arguments, '{"tz":"Asia/Shanghai"}')

@@ -1,5 +1,63 @@
 import { describe, expect, it } from 'vitest'
-import { mapUsage } from '../src/translate.ts'
+import { translate, mapUsage } from '../src/translate.ts'
+
+const DONE = '[DONE]'
+const payload = (wire: object) => JSON.stringify(wire)
+
+describe('tool-call deltas with explicit JSON null id/name', () => {
+  // Some upstreams re-send `id` and `function.name` as JSON `null` on
+  // continuation deltas instead of omitting the field. Earlier (issue #1)
+  // code guarded against EMPTY strings with `value.length > 0` but only
+  // checked `!== undefined`, so `null` slipped through and the `.length`
+  // read crashed the stream — caught by `adapter.stream()` and surfaced as
+  // TRANSPORT "NewAPI stream from ... failed". The stream cut happened
+  // exactly when a tool call began.
+  it('keeps the real id/name from the first delta when later deltas carry null', async () => {
+    const wire = (json: object) => payload({ choices: [{ delta: json }] })
+    const finish = (toolCalls: object[]) => payload({ choices: [{ delta: { tool_calls: toolCalls }, finish_reason: 'tool_calls' }] })
+    const inputs = [
+      wire({ reasoning_content: 'plan ahead', content: '', tool_calls: null }),
+      wire({ tool_calls: [{ index: 0, id: 'call-real', type: 'function', function: { name: 'bash', arguments: '' } }] }),
+      wire({ tool_calls: [{ index: 0, id: null, type: null, function: { name: null, arguments: '' } }] }),
+      finish([{ index: 0, id: null, type: null, function: { name: null, arguments: '{"command":"ls"}' } }]),
+      DONE,
+    ]
+    const out: any[] = []
+    for await (const chunk of translate((async function* () { for (const p of inputs) yield p })())) out.push(chunk)
+    const blockEnd = out.find(c => c.type === 'block-end' && c.block?.type === 'tool-call')
+    expect(blockEnd?.block).toEqual({ type: 'tool-call', id: 'call-real', name: 'bash', arguments: '{"command":"ls"}' })
+    expect(out.find(c => c.type === 'finish')?.reason).toEqual({ kind: 'tool-calls' })
+  })
+
+  it('keeps the real id when the name is sent as null', async () => {
+    const wire = (json: object) => payload({ choices: [{ delta: json }] })
+    const finish = (toolCalls: object[]) => payload({ choices: [{ delta: { tool_calls: toolCalls }, finish_reason: 'tool_calls' }] })
+    const inputs = [
+      wire({ tool_calls: [{ index: 0, id: 'call-real', type: 'function', function: { name: 'bash', arguments: '' } }] }),
+      wire({ tool_calls: [{ index: 0, id: 'call-real', type: 'function', function: { name: null, arguments: '' } }] }),
+      finish([{ index: 0, id: 'call-real', type: 'function', function: { name: null, arguments: '{}' } }]),
+      DONE,
+    ]
+    const out: any[] = []
+    for await (const chunk of translate((async function* () { for (const p of inputs) yield p })())) out.push(chunk)
+    const blockEnd = out.find(c => c.type === 'block-end' && c.block?.type === 'tool-call')
+    expect(blockEnd?.block?.name).toBe('bash')
+  })
+
+  it('coerces null arguments to an empty fragment', async () => {
+    const wire = (json: object) => payload({ choices: [{ delta: json }] })
+    const finish = (toolCalls: object[]) => payload({ choices: [{ delta: { tool_calls: toolCalls }, finish_reason: 'tool_calls' }] })
+    const inputs = [
+      wire({ tool_calls: [{ index: 0, id: 'call-real', type: 'function', function: { name: 'bash', arguments: null } }] }),
+      finish([{ index: 0, id: 'call-real', type: 'function', function: { name: 'bash', arguments: '{"command":"ls"}' } }]),
+      DONE,
+    ]
+    const out: any[] = []
+    for await (const chunk of translate((async function* () { for (const p of inputs) yield p })())) out.push(chunk)
+    const blockEnd = out.find(c => c.type === 'block-end' && c.block?.type === 'tool-call')
+    expect(blockEnd?.block?.arguments).toBe('{"command":"ls"}')
+  })
+})
 
 describe('mapUsage totalTokens', () => {
   it('derives totalTokens from valid prompt and completion counts', () => {
